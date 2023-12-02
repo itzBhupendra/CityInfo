@@ -1,0 +1,35 @@
+using System;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.IO;
+
+namespace PDFCompression
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            string inputFile = "input.pdf"; // Replace with your input file path
+            string outputFile = "output_compressed.pdf"; // Replace with your desired output file path
+
+            CompressPdf(inputFile, outputFile);
+        }
+
+        static void CompressPdf(string inputPath, string outputPath)
+        {
+            using (FileStream stream = new FileStream(outputPath, FileMode.Create))
+            {
+                PdfReader reader = new PdfReader(inputPath);
+                PdfStamper stamper = new PdfStamper(reader, stream, PdfWriter.VERSION_1_5);
+
+                // Use PdfCompressionLevel to set the compression level
+                stamper.SetFullCompression();
+
+                stamper.Close();
+                reader.Close();
+            }
+
+            Console.WriteLine("Compression complete.");
+        }
+    }
+}
