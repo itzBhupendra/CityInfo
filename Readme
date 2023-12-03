@@ -1,35 +1,47 @@
 using System;
+using System.IO;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
-using System.IO;
 
-namespace PDFCompression
+namespace PdfCompressionExample
 {
     class Program
     {
         static void Main(string[] args)
         {
-            string inputFile = "input.pdf"; // Replace with your input file path
-            string outputFile = "output_compressed.pdf"; // Replace with your desired output file path
+            string originalFile = "original.pdf";
+            string compressedFile = "compressed.pdf";
 
-            CompressPdf(inputFile, outputFile);
+            CompressPdf(originalFile, compressedFile);
+
+            Console.WriteLine("PDF Compression completed.");
         }
 
-        static void CompressPdf(string inputPath, string outputPath)
+        static void CompressPdf(string inputFile, string outputFile)
         {
-            using (FileStream stream = new FileStream(outputPath, FileMode.Create))
+            using (FileStream stream = new FileStream(outputFile, FileMode.Create))
             {
-                PdfReader reader = new PdfReader(inputPath);
-                PdfStamper stamper = new PdfStamper(reader, stream, PdfWriter.VERSION_1_5);
+                Document document = new Document();
+                PdfWriter writer = PdfWriter.GetInstance(document, stream);
 
-                // Use PdfCompressionLevel to set the compression level
-                stamper.SetFullCompression();
+                document.Open();
 
-                stamper.Close();
+                PdfReader reader = new PdfReader(inputFile);
+                PdfContentByte content = writer.DirectContent;
+
+                for (int i = 1; i <= reader.NumberOfPages; i++)
+                {
+                    document.SetPageSize(reader.GetPageSizeWithRotation(i));
+                    document.NewPage();
+
+                    PdfImportedPage page = writer.GetImportedPage(reader, i);
+                    content.AddTemplate(page, 0, 0);
+                }
+
+                document.Close();
+                writer.Close();
                 reader.Close();
             }
-
-            Console.WriteLine("Compression complete.");
         }
     }
 }
