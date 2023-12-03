@@ -1,32 +1,21 @@
-using PdfSharp.Pdf;
-using PdfSharp.Pdf.IO;
+import PyPDF2
 
-namespace PdfCompressionExample
-{
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            // Load the PDF document
-            string inputFilePath = "input.pdf"; // Replace with your input file path
-            string outputFilePath = "output.pdf"; // Replace with your output file path
+def compress_pdf(input_path, output_path):
+    with open(input_path, 'rb') as file:
+        pdf = PyPDF2.PdfFileReader(file)
+        writer = PyPDF2.PdfFileWriter()
 
-            using (PdfDocument document = PdfReader.Open(inputFilePath, PdfDocumentOpenMode.Modify))
-            {
-                // Compress images in each page
-                foreach (PdfPage page in document.Pages)
-                {
-                    // Compress images in the current page
-                    foreach (var image in page.Elements.OfType<PdfSharp.Pdf.Advanced.PdfImage>())
-                    {
-                        // You can adjust the quality/compression level here
-                        image.TryCompress();
-                    }
-                }
+        for page_num in range(pdf.getNumPages()):
+            writer.addPage(pdf.getPage(page_num))
 
-                // Save the modified document
-                document.Save(outputFilePath);
-            }
-        }
-    }
-}
+        # Set the compression level
+        writer.setCompression(9)  # You can set a compression level (0-9)
+
+        with open(output_path, 'wb') as output_file:
+            writer.write(output_file)
+
+# Replace 'input.pdf' and 'compressed_output.pdf' with your file names
+input_pdf = 'input.pdf'
+output_pdf = 'compressed_output.pdf'
+
+compress_pdf(input_pdf, output_pdf)
