@@ -1,60 +1,22 @@
-using System;
-using System.Collections.Concurrent;
-using System.IO;
-using System.Threading;
+import os
 
-class Program
-{
-    static ConcurrentQueue<string> messageQueue = new ConcurrentQueue<string>();
-    static bool isWriting = false;
+def get_next_folder_name(base_folder):
+    # Get a list of existing folder names
+    existing_folders = [folder for folder in os.listdir(base_folder) if os.path.isdir(os.path.join(base_folder, folder))]
+    
+    # Find the highest numbered folder and increment its name
+    if existing_folders:
+        existing_folders.sort(reverse=True)  # Sort folders in descending order
+        latest_folder = existing_folders[0]
+        base_name, number = latest_folder.split('_')
+        next_number = int(number) + 1
+        next_folder_name = f"{base_name}_{next_number:03d}"  # Use zero-padding for numerical ordering
+    else:
+        next_folder_name = "folder_001"  # If no folders exist, start with the first folder
+    
+    return next_folder_name
 
-    static void Main()
-    {
-        // Start the dedicated thread for writing to the file
-        Thread writingThread = new Thread(WriteToFile);
-        writingThread.Start();
-
-        // Example threads enqueuing messages to write to the file
-        Thread thread1 = new Thread(() => EnqueueMessage("Thread 1 is writing."));
-        Thread thread2 = new Thread(() => EnqueueMessage("Thread 2 is writing."));
-
-        thread1.Start();
-        thread2.Start();
-    }
-
-    static void EnqueueMessage(string message)
-    {
-        messageQueue.Enqueue(message);
-    }
-
-    static void WriteToFile()
-    {
-        string filePath = "example.txt";
-
-        while (true)
-        {
-            if (!isWriting && messageQueue.TryDequeue(out string message))
-            {
-                try
-                {
-                    isWriting = true;
-
-                    using (StreamWriter writer = File.AppendText(filePath))
-                    {
-                        writer.WriteLine(message);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Exception: {ex.Message}");
-                }
-                finally
-                {
-                    isWriting = false;
-                }
-            }
-            // Add a small delay to avoid busy-waiting
-            Thread.Sleep(10);
-        }
-    }
-}
+# Example usage:
+base_folder = 'path/to/your/base/folder'
+next_folder = get_next_folder_name(base_folder)
+print(next_folder)  # Print the next folder name
