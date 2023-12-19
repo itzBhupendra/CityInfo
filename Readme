@@ -1,22 +1,23 @@
-import os
+import logging
+from logging.handlers import RotatingFileHandler
 
-def get_next_folder_name(base_folder):
-    # Get a list of existing folder names
-    existing_folders = [folder for folder in os.listdir(base_folder) if os.path.isdir(os.path.join(base_folder, folder))]
-    
-    # Find the highest numbered folder and increment its name
-    if existing_folders:
-        existing_folders.sort(reverse=True)  # Sort folders in descending order
-        latest_folder = existing_folders[0]
-        base_name, number = latest_folder.split('_')
-        next_number = int(number) + 1
-        next_folder_name = f"{base_name}_{next_number:03d}"  # Use zero-padding for numerical ordering
-    else:
-        next_folder_name = "folder_001"  # If no folders exist, start with the first folder
-    
-    return next_folder_name
+def setup_custom_logger(name, log_file):
+    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+
+    handler = RotatingFileHandler(log_file, maxBytes=100000, backupCount=5)
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+
+    return logger
 
 # Example usage:
-base_folder = 'path/to/your/base/folder'
-next_folder = get_next_folder_name(base_folder)
-print(next_folder)  # Print the next folder name
+if __name__ == "__main__":
+    log_file_path = 'path/to/your/logs/logfile.log'
+    logger = setup_custom_logger('my_logger', log_file_path)
+
+    logger.info('This is an info message.')
+    logger.warning('This is a warning message.')
+    logger.error('This is an error message.')
