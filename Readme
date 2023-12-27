@@ -1,23 +1,36 @@
-import logging
-from logging.handlers import RotatingFileHandler
+class Event:
+    def __init__(self, name):
+        self.name = name
+        self.handlers = []
 
-def setup_custom_logger(name, log_file):
-    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+    def add_handler(self, handler):
+        self.handlers.append(handler)
 
-    handler = RotatingFileHandler(log_file, maxBytes=100000, backupCount=5)
-    handler.setFormatter(formatter)
+    def remove_handler(self, handler):
+        self.handlers.remove(handler)
 
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
+    def fire(self, *args, **kwargs):
+        for handler in self.handlers:
+            handler(*args, **kwargs)
 
-    return logger
 
 # Example usage:
-if __name__ == "__main__":
-    log_file_path = 'path/to/your/logs/logfile.log'
-    logger = setup_custom_logger('my_logger', log_file_path)
 
-    logger.info('This is an info message.')
-    logger.warning('This is a warning message.')
-    logger.error('This is an error message.')
+# Define a custom event
+custom_event = Event("CustomEvent")
+
+# Define an event handler
+def handle_custom_event(arg1, arg2):
+    print(f"Handling CustomEvent with arguments {arg1} and {arg2}")
+
+# Add the handler to the event
+custom_event.add_handler(handle_custom_event)
+
+# Trigger the event
+custom_event.fire("Hello", "World")
+
+# Remove the handler
+custom_event.remove_handler(handle_custom_event)
+
+# Trying to trigger the event again won't invoke the handler since it's removed
+custom_event.fire("This", "Won't Trigger the Handler")
