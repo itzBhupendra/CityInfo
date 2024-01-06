@@ -1,6 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Moq;
-using System;
 using System.Threading.Tasks;
 
 // Interface representing the API client
@@ -9,47 +9,14 @@ public interface IApiClient
     Task<string> GetDataFromApi();
 }
 
-// Service locator for dependency resolution
-public static class ServiceLocator
+// Class implementing the API client interface
+public class ApiClient : IApiClient
 {
-    private static IApiClient _apiClient;
-
-    public static IApiClient GetApiClient()
+    public async Task<string> GetDataFromApi()
     {
-        if (_apiClient == null)
-        {
-            // For testing, resolve the IApiClient with a mocked implementation
-            _apiClient = GetMockedApiClient();
-        }
-        return _apiClient;
-    }
-
-    private static IApiClient GetMockedApiClient()
-    {
-        var apiClientMock = new Mock<IApiClient>();
-        apiClientMock.Setup(client => client.GetDataFromApi())
-                     .ReturnsAsync("Fake data from API");
-        return apiClientMock.Object;
-    }
-}
-
-[TestFixture]
-public class ApiTests
-{
-    [Test]
-    public async Task Test_ParentFunction()
-    {
-        // Resolve the IApiClient using the service locator
-        var apiClient = ServiceLocator.GetApiClient();
-
-        // Pass the resolved object to the test subject
-        var classUnderTest = new ClassThatUsesApiClient();
-
-        // Act - Call the parent function that internally uses the API client
-        var result = await classUnderTest.ParentFunction();
-
-        // Assert - Verify the result
-        Assert.AreEqual("Fake data from API", result);
+        // Actual API call logic would be here
+        // For testing purposes, this example returns a hardcoded string
+        return "Real data from API";
     }
 }
 
@@ -58,9 +25,9 @@ public class ClassThatUsesApiClient
 {
     private readonly IApiClient _apiClient;
 
-    public ClassThatUsesApiClient()
+    public ClassThatUsesApiClient(IApiClient apiClient)
     {
-        _apiClient = ServiceLocator.GetApiClient();
+        _apiClient = apiClient;
     }
 
     public async Task<string> ParentFunction()
@@ -69,5 +36,38 @@ public class ClassThatUsesApiClient
         var data = await _apiClient.GetDataFromApi(); // API call made here
         // Perform some processing on the data...
         return data;
+    }
+}
+
+// Test Fixture
+[TestFixture]
+public class ApiTests
+{
+    [Test]
+    public async Task Test_ParentFunction()
+    {
+        // Create a service collection and register the IApiClient with a mocked implementation
+        var services = new ServiceCollection();
+        services.AddTransient<IApiClient>(_ => GetMockedApiClient());
+
+        // Build the service provider
+        var serviceProvider = services.BuildServiceProvider();
+
+        // Resolve the ClassThatUsesApiClient from the service provider
+        var classUnderTest = serviceProvider.GetRequiredService<ClassThatUsesApiClient>();
+
+        // Act - Call the parent function that internally uses the API client
+        var result = await classUnderTest.ParentFunction();
+
+        // Assert - Verify the result
+        Assert.AreEqual("Fake data from API", result);
+    }
+
+    private IApiClient GetMockedApiClient()
+    {
+        var apiClientMock = new Mock<IApiClient>();
+        apiClientMock.Setup(client => client.GetDataFromApi())
+                     .ReturnsAsync("Fake data from API");
+        return apiClientMock.Object;
     }
 }
