@@ -1,48 +1,73 @@
-Imports System.Threading
+using NUnit.Framework;
+using Moq;
+using System;
+using System.Threading.Tasks;
 
-Public Class Form1
-    ' Create a delegate to update the RichTextBox from another thread
-    Private Delegate Sub UpdateRichTextBoxDelegate(ByVal text As String)
+// Interface representing the API client
+public interface IApiClient
+{
+    Task<string> GetDataFromApi();
+}
 
-    ' Event handler for the events you want to receive
-    Private Sub YourEventHandler(ByVal sender As Object, ByVal e As EventArgs)
-        ' Process your event here
-        Dim eventData As String = "Received event: " & DateTime.Now.ToString() & vbCrLf
+// Service locator for dependency resolution
+public static class ServiceLocator
+{
+    private static IApiClient _apiClient;
 
-        ' Invoke the UI update using a delegate to ensure thread safety
-        UpdateRichTextBox(eventData)
-    End Sub
+    public static IApiClient GetApiClient()
+    {
+        if (_apiClient == null)
+        {
+            // For testing, resolve the IApiClient with a mocked implementation
+            _apiClient = GetMockedApiClient();
+        }
+        return _apiClient;
+    }
 
-    ' Method to update the RichTextBox from another thread
-    Private Sub UpdateRichTextBox(ByVal text As String)
-        If Me.InvokeRequired Then
-            ' If called from a different thread, invoke the delegate
-            Dim d As New UpdateRichTextBoxDelegate(AddressOf UpdateRichTextBox)
-            Me.Invoke(d, New Object() {text})
-        Else
-            ' If called from the UI thread, update the RichTextBox
-            RichTextBox1.AppendText(text)
-        End If
-    End Sub
+    private static IApiClient GetMockedApiClient()
+    {
+        var apiClientMock = new Mock<IApiClient>();
+        apiClientMock.Setup(client => client.GetDataFromApi())
+                     .ReturnsAsync("Fake data from API");
+        return apiClientMock.Object;
+    }
+}
 
-    Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        ' Subscribe to the event you want to receive
-        AddHandler YourEvent, AddressOf YourEventHandler
+[TestFixture]
+public class ApiTests
+{
+    [Test]
+    public async Task Test_ParentFunction()
+    {
+        // Resolve the IApiClient using the service locator
+        var apiClient = ServiceLocator.GetApiClient();
 
-        ' Start a separate thread to simulate events being raised
-        Dim eventThread As New Thread(AddressOf SimulateEvents)
-        eventThread.Start()
-    End Sub
+        // Pass the resolved object to the test subject
+        var classUnderTest = new ClassThatUsesApiClient();
 
-    ' Method to simulate raising events
-    Private Sub SimulateEvents()
-        ' Simulate events being raised
-        For i As Integer = 0 To 10
-            Thread.Sleep(1000) ' Simulate some work
-            RaiseEvent YourEvent(Me, EventArgs.Empty)
-        Next
-    End Sub
+        // Act - Call the parent function that internally uses the API client
+        var result = await classUnderTest.ParentFunction();
 
-    ' Define the event you want to receive
-    Private Event YourEvent As EventHandler
-End Class
+        // Assert - Verify the result
+        Assert.AreEqual("Fake data from API", result);
+    }
+}
+
+// Example class that uses the API client
+public class ClassThatUsesApiClient
+{
+    private readonly IApiClient _apiClient;
+
+    public ClassThatUsesApiClient()
+    {
+        _apiClient = ServiceLocator.GetApiClient();
+    }
+
+    public async Task<string> ParentFunction()
+    {
+        // The parent function that internally calls GetDataFromApi()
+        var data = await _apiClient.GetDataFromApi(); // API call made here
+        // Perform some processing on the data...
+        return data;
+    }
+}
