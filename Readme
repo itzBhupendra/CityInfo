@@ -1,73 +1,135 @@
-using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Moq;
-using System.Threading.Tasks;
-
-// Interface representing the API client
-public interface IApiClient
-{
-    Task<string> GetDataFromApi();
-}
-
-// Class implementing the API client interface
-public class ApiClient : IApiClient
-{
-    public async Task<string> GetDataFromApi()
+  public List<List<T>> ExecuteStoredProcedure<T>(string storedProcedureName, object parameters = null)
     {
-        // Actual API call logic would be here
-        // For testing purposes, this example returns a hardcoded string
-        return "Real data from API";
-    }
-}
+        using (var connection = new SqlConnection(_connectionString))
+        {
+            connection.Open();
 
-// Example class that uses the API client
-public class ClassThatUsesApiClient
-{
-    private readonly IApiClient _apiClient;
+            var result = connection.QueryMultiple(storedProcedureName, parameters, commandType: CommandType.StoredProcedure);
 
-    public ClassThatUsesApiClient(IApiClient apiClient)
-    {
-        _apiClient = apiClient;
+            var resultSetCount = result.Read<int>().FirstOrDefault();
+            var resultList = new List<List<T>>(resultSetCount);
+
+            for (int i = 0; i < resultSetCount; i++)
+            {
+                var resultSet = result.Read<T>().ToList();
+                resultList.Add(resultSet);
+            }
+
+            return resultList;
+        }
     }
 
-    public async Task<string> ParentFunction()
+public IEnumerable<T> ExecuteStoredProcedure<T>(string storedProcedureName, object parameters = null)
     {
-        // The parent function that internally calls GetDataFromApi()
-        var data = await _apiClient.GetDataFromApi(); // API call made here
-        // Perform some processing on the data...
-        return data;
-    }
-}
-
-// Test Fixture
-[TestFixture]
-public class ApiTests
-{
-    [Test]
-    public async Task Test_ParentFunction()
-    {
-        // Create a service collection and register the IApiClient with a mocked implementation
-        var services = new ServiceCollection();
-        services.AddTransient<IApiClient>(_ => GetMockedApiClient());
-
-        // Build the service provider
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Resolve the ClassThatUsesApiClient from the service provider
-        var classUnderTest = serviceProvider.GetRequiredService<ClassThatUsesApiClient>();
-
-        // Act - Call the parent function that internally uses the API client
-        var result = await classUnderTest.ParentFunction();
-
-        // Assert - Verify the result
-        Assert.AreEqual("Fake data from API", result);
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.Query<T>(storedProcedureName, parameters, commandType: CommandType.StoredProcedure);
+        }
     }
 
-    private IApiClient GetMockedApiClient()
+    public int ExecuteInsert(string sql, object parameters = null)
     {
-        var apiClientMock = new Mock<IApiClient>();
-        apiClientMock.Setup(client => client.GetDataFromApi())
-                     .ReturnsAsync("Fake data from API");
-        return apiClientMock.Object;
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.Execute(sql, parameters);
+        }
     }
-}
+
+    public int ExecuteUpdate(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.Execute(sql, parameters);
+        }
+    }
+
+    public int ExecuteDelete(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.Execute(sql, parameters);
+        }
+    }
+
+
+ public void ExecuteNonQueryWithTransaction(string query, object parameters = null)
+    {
+        using (var connection = new SqlConnection(_connectionString))
+        {
+            connection.Open();
+
+            using (var transaction = connection.BeginTransaction())
+            {
+                try
+                {
+                    connection.Execute(query, parameters, transaction: transaction);
+
+                    // Commit the transaction if everything is successful
+                    transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions and roll back the transaction
+                    Console.WriteLine($"Error: {ex.Message}");
+                    transaction.Rollback();
+                }
+            }
+        }
+		
+		  public IEnumerable<T> Query<T>(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.Query<T>(sql, parameters);
+        }
+    }
+
+    public T QueryFirst<T>(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.QueryFirst<T>(sql, parameters);
+        }
+    }
+
+    public T QueryFirstOrDefault<T>(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.QueryFirstOrDefault<T>(sql, parameters);
+        }
+    }
+
+    public T QuerySingle<T>(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.QuerySingle<T>(sql, parameters);
+        }
+    }
+
+    public T QuerySingleOrDefault<T>(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.QuerySingleOrDefault<T>(sql, parameters);
+        }
+    }
+
+    public SqlMapper.GridReader QueryMultiple(string sql, object parameters = null)
+    {
+        using (IDbConnection dbConnection = new SqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            return dbConnection.QueryMultiple(sql, parameters);
+        }
+    }
