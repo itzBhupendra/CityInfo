@@ -1,27 +1,14 @@
-ChatGPT 3.5
-
-User
-Can you please generate a list of possible errors from a dataaccess layer with description 
-
-ChatGPT
-Sure, here are some common errors that might occur in a data access layer along with descriptions:
-
-Connection Timeout: Unable to establish a connection with the database within the specified time limit.
-
-SQL Syntax Error: Incorrect syntax used in the SQL query, leading to failure in executing the query.
-
-Database Connection Closed: The connection to the database is closed unexpectedly, possibly due to network issues or server shutdown.
-
-Constraint Violation: Attempting to insert or update data that violates a constraint, such as a unique key or foreign key constraint.
-
-Data Conversion Error: Unable to convert data from one type to another, for example, trying to insert a string into a numeric column.
-
-Deadlock: Two or more transactions are waiting for each other to release locks on resources, resulting in a deadlock situation.
-
-Data Integrity Violation: Data retrieved from the database does not match expected integrity constraints, indicating potential corruption or inconsistency.
-
-Connection Pool Exhausted: All connections in the connection pool are in use, and no more connections are available to handle new requests.
-
-Object Not Found: Attempting to access or manipulate an object that does not exist in the database.
-
-Concurrency Conflict: Multiple users or processes are attempting to modify the same data simultaneously, leading to conflicts and inconsistencies.
+CREATE FUNCTION GetCTTime ()
+RETURNS DATETIME
+AS
+BEGIN
+    DECLARE @output_datetime DATETIME;
+    SET @output_datetime = 
+        CASE
+            WHEN DATEPART(MONTH, GETUTCDATE()) BETWEEN 3 AND 10 THEN -- Daylight saving time observed from March to October
+                DATEADD(HOUR, -5, GETUTCDATE()) -- Central Daylight Time (CDT) is UTC -5 hours
+            ELSE
+                DATEADD(HOUR, -6, GETUTCDATE()) -- Central Standard Time (CST) is UTC -6 hours
+        END;
+    RETURN @output_datetime;
+END
