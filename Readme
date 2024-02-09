@@ -1,14 +1,22 @@
+-- Function to get current Central Time (CT), accounting for daylight saving time
 CREATE FUNCTION GetCTTime ()
 RETURNS DATETIME
 AS
 BEGIN
     DECLARE @output_datetime DATETIME;
-    SET @output_datetime = 
-        CASE
-            WHEN DATEPART(MONTH, GETUTCDATE()) BETWEEN 3 AND 10 THEN -- Daylight saving time observed from March to October
-                DATEADD(HOUR, -5, GETUTCDATE()) -- Central Daylight Time (CDT) is UTC -5 hours
-            ELSE
-                DATEADD(HOUR, -6, GETUTCDATE()) -- Central Standard Time (CST) is UTC -6 hours
-        END;
+    DECLARE @current_year INT = YEAR(GETUTCDATE());
+    DECLARE @dst_start_date DATETIME;
+    DECLARE @dst_end_date DATETIME;
+
+    -- Calculate the start and end dates for daylight saving time in the current year
+    SET @dst_start_date = DATEADD(DAY, (1 - DATEPART(WEEKDAY, DATEFROMPARTS(@current_year, 3, 8))) + 7, DATEFROMPARTS(@current_year, 3, 8)); -- Second Sunday in March
+    SET @dst_end_date = DATEADD(DAY, (1 - DATEPART(WEEKDAY, DATEFROMPARTS(@current_year, 11, 1))) + 7, DATEFROMPARTS(@current_year, 11, 1)); -- First Sunday in November
+
+    -- Determine if the current date is within daylight saving time
+    IF GETUTCDATE() >= @dst_start_date AND GETUTCDATE() < @dst_end_date
+        SET @output_datetime = DATEADD(HOUR, -5, GETUTCDATE()); -- Central Daylight Time (CDT) is UTC -5 hours
+    ELSE
+        SET @output_datetime = DATEADD(HOUR, -6, GETUTCDATE()); -- Central Standard Time (CST) is UTC -6 hours
+    
     RETURN @output_datetime;
 END
