@@ -17,6 +17,10 @@ BEGIN
         SET @output_datetime = DATEADD(HOUR, -5, GETUTCDATE()); -- Central Daylight Time (CDT) is UTC -5 hours
     ELSE
         SET @output_datetime = DATEADD(HOUR, -6, GETUTCDATE()); -- Central Standard Time (CST) is UTC -6 hours
-    
+
+    -- Handle the "spring forward" transition at 2:00 AM
+    IF GETUTCDATE() >= @dst_start_date AND GETUTCDATE() < DATEADD(HOUR, 1, @dst_start_date) AND DATEPART(HOUR, GETUTCDATE()) = 2
+        SET @output_datetime = DATEADD(MINUTE, 60, @output_datetime); -- Add an additional hour during the transition
+
     RETURN @output_datetime;
 END
