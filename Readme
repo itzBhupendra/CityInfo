@@ -1,26 +1,56 @@
--- Function to get current Central Time (CT), accounting for daylight saving time
-CREATE FUNCTION GetCTTime ()
-RETURNS DATETIME
-AS
-BEGIN
-    DECLARE @output_datetime DATETIME;
-    DECLARE @current_year INT = YEAR(GETUTCDATE());
-    DECLARE @dst_start_date DATETIME;
-    DECLARE @dst_end_date DATETIME;
+This document provides an overview of a sample project demonstrating the implementation of a data access layer using Dapper with transaction support. The project aims to showcase best practices for interacting with a SQL Server database using Dapper while ensuring data integrity through transactional operations.
 
-    -- Calculate the start and end dates for daylight saving time in the current year
-    SET @dst_start_date = DATEADD(DAY, (1 - DATEPART(WEEKDAY, DATEFROMPARTS(@current_year, 3, 8))) + 7, DATEFROMPARTS(@current_year, 3, 8)); -- Second Sunday in March
-    SET @dst_end_date = DATEADD(DAY, (1 - DATEPART(WEEKDAY, DATEFROMPARTS(@current_year, 11, 1))) + 7, DATEFROMPARTS(@current_year, 11, 1)); -- First Sunday in November
+Scope:
+The scope of this project includes:
 
-    -- Determine if the current date is within daylight saving time
-    IF GETUTCDATE() >= @dst_start_date AND GETUTCDATE() < @dst_end_date
-        SET @output_datetime = DATEADD(HOUR, -5, GETUTCDATE()); -- Central Daylight Time (CDT) is UTC -5 hours
-    ELSE
-        SET @output_datetime = DATEADD(HOUR, -6, GETUTCDATE()); -- Central Standard Time (CST) is UTC -6 hours
+Data Access Layer (DAL): The project implements a robust data access layer that encapsulates common database operations, including CRUD (Create, Read, Update, Delete) operations, transaction management, and error handling.
 
-    -- Handle the "spring forward" transition at 2:00 AM
-    IF GETUTCDATE() >= @dst_start_date AND GETUTCDATE() < DATEADD(HOUR, 1, @dst_start_date) AND DATEPART(HOUR, GETUTCDATE()) = 2
-        SET @output_datetime = DATEADD(MINUTE, 60, @output_datetime); -- Add an additional hour during the transition
+Transactional Support: It demonstrates how to perform database operations within a transactional context to ensure atomicity, consistency, isolation, and durability (ACID properties).
 
-    RETURN @output_datetime;
-END
+Error Handling: The project includes mechanisms for handling database-related errors gracefully, providing informative error messages, and rolling back transactions in case of failures.
+
+Key Features:
+
+Data Access Functions: The project includes a comprehensive set of data access functions covering various database operations, including:
+
+Inserting new records into tables.
+Retrieving records based on specific criteria.
+Updating existing records.
+Deleting records from tables.
+Executing stored procedures with input parameters and result sets.
+Transaction Management: It demonstrates how to initiate, commit, and roll back transactions to ensure data consistency and reliability during complex database operations involving multiple queries or updates.
+
+Error Handling: The project incorporates robust error handling mechanisms to catch and handle database-related exceptions, providing informative error messages and logging details for troubleshooting purposes.
+
+Project Components:
+
+DataAccess Class: Contains methods for executing SQL commands, stored procedures, and database operations within a transactional context using Dapper.
+
+Includes functions for executing CRUD operations (Insert, Select, Update, Delete).
+Provides methods for executing raw SQL queries and stored procedures.
+Implements transaction management functions for initiating, committing, and rolling back transactions.
+Program Class: Entry point of the application. Demonstrates the usage of data access functions provided by the DataAccess class to interact with the database within a transactional context.
+
+Conclusion:
+This project serves as a comprehensive guide for implementing a robust data access layer with transaction support using Dapper. By following the provided example and best practices, developers can achieve efficient and reliable database interactions while ensuring data integrity and consistency through transactional operations.
+
+Next Steps:
+Developers can further enhance this project by:
+
+Adding support for additional database operations, such as batch updates, complex queries, and data validation.
+Implementing performance optimization techniques, such as caching, connection pooling, and asynchronous database operations.
+Extending error handling and logging mechanisms to provide comprehensive error reporting and monitoring capabilities.
+Acknowledgments:
+This project is based on the Dapper micro-ORM library developed by Sam Saffron and Marc Gravell. Special thanks to the Dapper community for their contributions and support.
+
+References:
+
+Dapper GitHub Repository: https://github.com/DapperLib/Dapper
+Dapper Documentation: https://dapper-tutorial.net/
+Author:
+[Your Name/Your Organization]
+
+Date:
+[Date of Document Creation]
+
+Feel free to copy this content into a Word document and customize it as needed for your project documentation.
