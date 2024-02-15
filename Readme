@@ -1,56 +1,159 @@
-This document provides an overview of a sample project demonstrating the implementation of a data access layer using Dapper with transaction support. The project aims to showcase best practices for interacting with a SQL Server database using Dapper while ensuring data integrity through transactional operations.
+using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
 
-Scope:
-The scope of this project includes:
+namespace YourNamespace.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class DapperController : ControllerBase
+    {
+        private readonly DapperDataAccess _dataAccess;
 
-Data Access Layer (DAL): The project implements a robust data access layer that encapsulates common database operations, including CRUD (Create, Read, Update, Delete) operations, transaction management, and error handling.
+        public DapperController(DapperDataAccess dataAccess)
+        {
+            _dataAccess = dataAccess;
+        }
 
-Transactional Support: It demonstrates how to perform database operations within a transactional context to ensure atomicity, consistency, isolation, and durability (ACID properties).
+        /// <summary>
+        /// Executes a non-query SQL statement with Dapper within a transaction.
+        /// </summary>
+        /// <param name="query">The SQL query to execute.</param>
+        /// <param name="parameters">Optional parameters for the query.</param>
+        /// <returns>ActionResult indicating success or failure.</returns>
+        [HttpPost("ExecuteNonQueryWithTransaction")]
+        public IActionResult ExecuteNonQueryWithTransaction(string query, object parameters = null)
+        {
+            try
+            {
+                _dataAccess.ExecuteNonQueryWithTransaction(query, parameters);
+                return Ok("Query executed successfully with transaction.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing query with transaction: {ex.Message}");
+            }
+        }
 
-Error Handling: The project includes mechanisms for handling database-related errors gracefully, providing informative error messages, and rolling back transactions in case of failures.
+        /// <summary>
+        /// Executes a stored procedure with multiple result sets using Dapper.
+        /// </summary>
+        /// <param name="storedProcedureName">Name of the stored procedure to execute.</param>
+        /// <param name="parameters">Optional parameters for the stored procedure.</param>
+        /// <returns>List of lists, each containing the result set from one query.</returns>
+        [HttpGet("ExecuteStoredProcedureWithMultipleResultSets")]
+        public IActionResult ExecuteStoredProcedureWithMultipleResultSets(string storedProcedureName, object parameters = null)
+        {
+            try
+            {
+                List<List<dynamic>> result = _dataAccess.ExecuteStoredProcedureWithMultipleResultSets(storedProcedureName, parameters);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing stored procedure with multiple result sets: {ex.Message}");
+            }
+        }
 
-Key Features:
+        /// <summary>
+        /// Executes a stored procedure with a single result set using Dapper.
+        /// </summary>
+        /// <typeparam name="T">Type of the result set.</typeparam>
+        /// <param name="storedProcedureName">Name of the stored procedure to execute.</param>
+        /// <param name="parameters">Optional parameters for the stored procedure.</param>
+        /// <returns>List containing the result set from the stored procedure.</returns>
+        [HttpGet("ExecuteStoredProcedureWithSingleResultSet")]
+        public IActionResult ExecuteStoredProcedureWithSingleResultSet<T>(string storedProcedureName, object parameters = null)
+        {
+            try
+            {
+                List<T> result = _dataAccess.ExecuteStoredProcedureWithSingleResultSet<T>(storedProcedureName, parameters);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing stored procedure with single result set: {ex.Message}");
+            }
+        }
+   /// <summary>
+        /// Executes a non-query SQL statement with Dapper.
+        /// </summary>
+        /// <param name="query">The SQL query to execute.</param>
+        /// <param name="parameters">Optional parameters for the query.</param>
+        /// <returns>ActionResult indicating success or failure.</returns>
+        [HttpPost("ExecuteNonQuery")]
+        public IActionResult ExecuteNonQuery(string query, object parameters = null)
+        {
+            try
+            {
+                _dataAccess.ExecuteNonQuery(query, parameters);
+                return Ok("Query executed successfully.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing query: {ex.Message}");
+            }
+        }
 
-Data Access Functions: The project includes a comprehensive set of data access functions covering various database operations, including:
+ /// <summary>
+        /// Executes a SQL query and returns a list of dynamic objects.
+        /// </summary>
+        /// <param name="query">The SQL query to execute.</param>
+        /// <param name="parameters">Optional parameters for the query.</param>
+        /// <returns>List of dynamic objects representing the query result.</returns>
+        [HttpGet("Query")]
+        public IActionResult Query(string query, object parameters = null)
+        {
+            try
+            {
+                List<dynamic> result = _dataAccess.Query(query, parameters);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing query: {ex.Message}");
+            }
+        }
 
-Inserting new records into tables.
-Retrieving records based on specific criteria.
-Updating existing records.
-Deleting records from tables.
-Executing stored procedures with input parameters and result sets.
-Transaction Management: It demonstrates how to initiate, commit, and roll back transactions to ensure data consistency and reliability during complex database operations involving multiple queries or updates.
+        /// <summary>
+        /// Executes a SQL query and returns the first row of the result set.
+        /// </summary>
+        /// <param name="query">The SQL query to execute.</param>
+        /// <param name="parameters">Optional parameters for the query.</param>
+        /// <returns>Dynamic object representing the first row of the query result.</returns>
+        [HttpGet("QueryFirst")]
+        public IActionResult QueryFirst(string query, object parameters = null)
+        {
+            try
+            {
+                dynamic result = _dataAccess.QueryFirst(query, parameters);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing query: {ex.Message}");
+            }
+        }
 
-Error Handling: The project incorporates robust error handling mechanisms to catch and handle database-related exceptions, providing informative error messages and logging details for troubleshooting purposes.
+        // Similarly, you can add methods for QueryFirstOrDefault, QuerySingle<T>, QuerySingleOrDefault<T>
 
-Project Components:
+        // Example:
+        /*
+        [HttpGet("QueryFirstOrDefault")]
+        public IActionResult QueryFirstOrDefault<T>(string query, object parameters = null)
+        {
+            try
+            {
+                T result = _dataAccess.QueryFirstOrDefault<T>(query, parameters);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error executing query: {ex.Message}");
+            }
+        }
+        */
 
-DataAccess Class: Contains methods for executing SQL commands, stored procedures, and database operations within a transactional context using Dapper.
-
-Includes functions for executing CRUD operations (Insert, Select, Update, Delete).
-Provides methods for executing raw SQL queries and stored procedures.
-Implements transaction management functions for initiating, committing, and rolling back transactions.
-Program Class: Entry point of the application. Demonstrates the usage of data access functions provided by the DataAccess class to interact with the database within a transactional context.
-
-Conclusion:
-This project serves as a comprehensive guide for implementing a robust data access layer with transaction support using Dapper. By following the provided example and best practices, developers can achieve efficient and reliable database interactions while ensuring data integrity and consistency through transactional operations.
-
-Next Steps:
-Developers can further enhance this project by:
-
-Adding support for additional database operations, such as batch updates, complex queries, and data validation.
-Implementing performance optimization techniques, such as caching, connection pooling, and asynchronous database operations.
-Extending error handling and logging mechanisms to provide comprehensive error reporting and monitoring capabilities.
-Acknowledgments:
-This project is based on the Dapper micro-ORM library developed by Sam Saffron and Marc Gravell. Special thanks to the Dapper community for their contributions and support.
-
-References:
-
-Dapper GitHub Repository: https://github.com/DapperLib/Dapper
-Dapper Documentation: https://dapper-tutorial.net/
-Author:
-[Your Name/Your Organization]
-
-Date:
-[Date of Document Creation]
-
-Feel free to copy this content into a Word document and customize it as needed for your project documentation.
+        // Add other methods...
+    }
+}
