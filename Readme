@@ -1,159 +1,29 @@
-using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Generic;
+Query: Executes a SQL query and returns a list of dynamic objects.
+Query<T>: Executes a SQL query and returns a list of strongly typed objects of type T.
+QueryFirst: Executes a SQL query and returns the first row of the result set as a dynamic object.
+QueryFirst<T>: Executes a SQL query and returns the first row of the result set as a strongly typed object of type T.
+QueryFirstOrDefault: Executes a SQL query and returns the first row of the result set as a dynamic object, or default(T) if the result set is empty.
+QueryFirstOrDefault<T>: Executes a SQL query and returns the first row of the result set as a strongly typed object of type T, or default(T) if the result set is empty.
+QuerySingle: Executes a SQL query and returns a single row of the result set as a dynamic object. Throws an exception if the result set contains more than one row.
+QuerySingle<T>: Executes a SQL query and returns a single row of the result set as a strongly typed object of type T. Throws an exception if the result set contains more than one row.
+QuerySingleOrDefault: Executes a SQL query and returns a single row of the result set as a dynamic object, or default(T) if the result set is empty. Throws an exception if the result set contains more than one row.
+QuerySingleOrDefault<T>: Executes a SQL query and returns a single row of the result set as a strongly typed object of type T, or default(T) if the result set is empty. Throws an exception if the result set contains more than one row.
+With Transactions:
 
-namespace YourNamespace.Controllers
-{
-    [Route("api/[controller]")]
-    [ApiController]
-    public class DapperController : ControllerBase
-    {
-        private readonly DapperDataAccess _dataAccess;
+Query<T> (with IDbTransaction): Executes a SQL query within a transaction and returns a list of strongly typed objects of type T.
+Execute Methods:
+Without Transactions:
 
-        public DapperController(DapperDataAccess dataAccess)
-        {
-            _dataAccess = dataAccess;
-        }
+Execute: Executes a command (SQL query or stored procedure) against the database and returns the number of affected rows.
+ExecuteScalar: Executes a command against the database and returns the first column of the first row in the result set returned by the query. Additional columns or rows are ignored.
+ExecuteReader: Executes a command against the database and returns a data reader, allowing you to iterate over the result set.
+ExecuteNonQuery: Executes a command against the database and returns the number of affected rows. This is similar to the Execute method but provides better readability when working with non-query commands.
+ExecuteScalarAsync: Asynchronously executes a command against the database and returns the first column of the first row in the result set returned by the query. Additional columns or rows are ignored.
+ExecuteReaderAsync: Asynchronously executes a command against the database and returns a data reader, allowing you to iterate over the result set.
+ExecuteNonQueryAsync: Asynchronously executes a command against the database and returns the number of affected rows. This is similar to the ExecuteNonQuery method but allows for asynchronous execution.
+With Transactions:
 
-        /// <summary>
-        /// Executes a non-query SQL statement with Dapper within a transaction.
-        /// </summary>
-        /// <param name="query">The SQL query to execute.</param>
-        /// <param name="parameters">Optional parameters for the query.</param>
-        /// <returns>ActionResult indicating success or failure.</returns>
-        [HttpPost("ExecuteNonQueryWithTransaction")]
-        public IActionResult ExecuteNonQueryWithTransaction(string query, object parameters = null)
-        {
-            try
-            {
-                _dataAccess.ExecuteNonQueryWithTransaction(query, parameters);
-                return Ok("Query executed successfully with transaction.");
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing query with transaction: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Executes a stored procedure with multiple result sets using Dapper.
-        /// </summary>
-        /// <param name="storedProcedureName">Name of the stored procedure to execute.</param>
-        /// <param name="parameters">Optional parameters for the stored procedure.</param>
-        /// <returns>List of lists, each containing the result set from one query.</returns>
-        [HttpGet("ExecuteStoredProcedureWithMultipleResultSets")]
-        public IActionResult ExecuteStoredProcedureWithMultipleResultSets(string storedProcedureName, object parameters = null)
-        {
-            try
-            {
-                List<List<dynamic>> result = _dataAccess.ExecuteStoredProcedureWithMultipleResultSets(storedProcedureName, parameters);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing stored procedure with multiple result sets: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Executes a stored procedure with a single result set using Dapper.
-        /// </summary>
-        /// <typeparam name="T">Type of the result set.</typeparam>
-        /// <param name="storedProcedureName">Name of the stored procedure to execute.</param>
-        /// <param name="parameters">Optional parameters for the stored procedure.</param>
-        /// <returns>List containing the result set from the stored procedure.</returns>
-        [HttpGet("ExecuteStoredProcedureWithSingleResultSet")]
-        public IActionResult ExecuteStoredProcedureWithSingleResultSet<T>(string storedProcedureName, object parameters = null)
-        {
-            try
-            {
-                List<T> result = _dataAccess.ExecuteStoredProcedureWithSingleResultSet<T>(storedProcedureName, parameters);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing stored procedure with single result set: {ex.Message}");
-            }
-        }
-   /// <summary>
-        /// Executes a non-query SQL statement with Dapper.
-        /// </summary>
-        /// <param name="query">The SQL query to execute.</param>
-        /// <param name="parameters">Optional parameters for the query.</param>
-        /// <returns>ActionResult indicating success or failure.</returns>
-        [HttpPost("ExecuteNonQuery")]
-        public IActionResult ExecuteNonQuery(string query, object parameters = null)
-        {
-            try
-            {
-                _dataAccess.ExecuteNonQuery(query, parameters);
-                return Ok("Query executed successfully.");
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing query: {ex.Message}");
-            }
-        }
-
- /// <summary>
-        /// Executes a SQL query and returns a list of dynamic objects.
-        /// </summary>
-        /// <param name="query">The SQL query to execute.</param>
-        /// <param name="parameters">Optional parameters for the query.</param>
-        /// <returns>List of dynamic objects representing the query result.</returns>
-        [HttpGet("Query")]
-        public IActionResult Query(string query, object parameters = null)
-        {
-            try
-            {
-                List<dynamic> result = _dataAccess.Query(query, parameters);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing query: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Executes a SQL query and returns the first row of the result set.
-        /// </summary>
-        /// <param name="query">The SQL query to execute.</param>
-        /// <param name="parameters">Optional parameters for the query.</param>
-        /// <returns>Dynamic object representing the first row of the query result.</returns>
-        [HttpGet("QueryFirst")]
-        public IActionResult QueryFirst(string query, object parameters = null)
-        {
-            try
-            {
-                dynamic result = _dataAccess.QueryFirst(query, parameters);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing query: {ex.Message}");
-            }
-        }
-
-        // Similarly, you can add methods for QueryFirstOrDefault, QuerySingle<T>, QuerySingleOrDefault<T>
-
-        // Example:
-        /*
-        [HttpGet("QueryFirstOrDefault")]
-        public IActionResult QueryFirstOrDefault<T>(string query, object parameters = null)
-        {
-            try
-            {
-                T result = _dataAccess.QueryFirstOrDefault<T>(query, parameters);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"Error executing query: {ex.Message}");
-            }
-        }
-        */
-
-        // Add other methods...
-    }
-}
+Execute (with IDbTransaction): Executes a command within a transaction and returns the number of affected rows.
+ExecuteScalar (with IDbTransaction): Executes a command within a transaction and returns the first column of the first row in the result set returned by the query.
+ExecuteReader (with IDbTransaction): Executes a command within a transaction and returns a data reader.
+ExecuteNonQuery (with IDbTransaction): Executes a command within a transaction and returns the number of affected rows.
