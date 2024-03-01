@@ -1,85 +1,38 @@
-using Microsoft.Extensions.Logging;
 using System;
-using System.Diagnostics;
-using System.IO;
+using System.Windows.Forms;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Logging.Debug;
+using Microsoft.Extensions.Configuration;
 
-public class XmsTraceLoggerProvider : ILoggerProvider
+namespace YourNamespace
 {
-    private readonly string _logFilePath;
-
-    public XmsTraceLoggerProvider(string logFilePath)
+    static class Program
     {
-        _logFilePath = logFilePath;
-    }
-
-    public ILogger CreateLogger(string categoryName)
-    {
-        if (categoryName == "XMS")
+        [STAThread]
+        static void Main()
         {
-            var traceSource = new TraceSource("IBM.XMS");
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
 
-            return new XmsTraceLogger(traceSource, _logFilePath);
-        }
+            // Build configuration
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                .Build();
 
-        return null;
-    }
+            // Configure logging
+            ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConfiguration(configuration.GetSection("Logging"));
+                builder.AddConsole();
+                builder.AddDebug();
+                builder.AddFile(configuration.GetSection("Logging"));
+            });
 
-    public void Dispose()
-    {
-    }
-}
+            ILogger logger = loggerFactory.CreateLogger<Program>();
 
-public class XmsTraceLogger : ILogger
-{
-    private readonly TraceSource _traceSource;
-    private readonly string _logFilePath;
-
-    public XmsTraceLogger(TraceSource traceSource, string logFilePath)
-    {
-        _traceSource = traceSource;
-        _logFilePath = logFilePath;
-    }
-
-    public IDisposable BeginScope<TState>(TState state)
-    {
-        return null;
-    }
-
-    public bool IsEnabled(LogLevel logLevel)
-    {
-        return true;
-    }
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-    {
-        string message = formatter(state, exception);
-
-        // Append log message to file
-        File.AppendAllText(_logFilePath, $"{DateTime.Now} [{logLevel}] - {message}{Environment.NewLine}");
-
-        // Write log message to TraceSource
-        _traceSource.TraceEvent(GetTraceEventType(logLevel), 0, message);
-    }
-
-    private TraceEventType GetTraceEventType(LogLevel logLevel)
-    {
-        // Map log level to trace event type
-        switch (logLevel)
-        {
-            case LogLevel.Trace:
-                return TraceEventType.Verbose;
-            case LogLevel.Debug:
-                return TraceEventType.Information;
-            case LogLevel.Information:
-                return TraceEventType.Information;
-            case LogLevel.Warning:
-                return TraceEventType.Warning;
-            case LogLevel.Error:
-                return TraceEventType.Error;
-            case LogLevel.Critical:
-                return TraceEventType.Critical;
-            default:
-                return TraceEventType.Verbose;
+            Application.Run(new YourForm(logger));
         }
     }
 }
