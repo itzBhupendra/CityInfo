@@ -1,29 +1,19 @@
-Query: Executes a SQL query and returns a list of dynamic objects.
-Query<T>: Executes a SQL query and returns a list of strongly typed objects of type T.
-QueryFirst: Executes a SQL query and returns the first row of the result set as a dynamic object.
-QueryFirst<T>: Executes a SQL query and returns the first row of the result set as a strongly typed object of type T.
-QueryFirstOrDefault: Executes a SQL query and returns the first row of the result set as a dynamic object, or default(T) if the result set is empty.
-QueryFirstOrDefault<T>: Executes a SQL query and returns the first row of the result set as a strongly typed object of type T, or default(T) if the result set is empty.
-QuerySingle: Executes a SQL query and returns a single row of the result set as a dynamic object. Throws an exception if the result set contains more than one row.
-QuerySingle<T>: Executes a SQL query and returns a single row of the result set as a strongly typed object of type T. Throws an exception if the result set contains more than one row.
-QuerySingleOrDefault: Executes a SQL query and returns a single row of the result set as a dynamic object, or default(T) if the result set is empty. Throws an exception if the result set contains more than one row.
-QuerySingleOrDefault<T>: Executes a SQL query and returns a single row of the result set as a strongly typed object of type T, or default(T) if the result set is empty. Throws an exception if the result set contains more than one row.
-With Transactions:
-
-Query<T> (with IDbTransaction): Executes a SQL query within a transaction and returns a list of strongly typed objects of type T.
-Execute Methods:
-Without Transactions:
-
-Execute: Executes a command (SQL query or stored procedure) against the database and returns the number of affected rows.
-ExecuteScalar: Executes a command against the database and returns the first column of the first row in the result set returned by the query. Additional columns or rows are ignored.
-ExecuteReader: Executes a command against the database and returns a data reader, allowing you to iterate over the result set.
-ExecuteNonQuery: Executes a command against the database and returns the number of affected rows. This is similar to the Execute method but provides better readability when working with non-query commands.
-ExecuteScalarAsync: Asynchronously executes a command against the database and returns the first column of the first row in the result set returned by the query. Additional columns or rows are ignored.
-ExecuteReaderAsync: Asynchronously executes a command against the database and returns a data reader, allowing you to iterate over the result set.
-ExecuteNonQueryAsync: Asynchronously executes a command against the database and returns the number of affected rows. This is similar to the ExecuteNonQuery method but allows for asynchronous execution.
-With Transactions:
-
-Execute (with IDbTransaction): Executes a command within a transaction and returns the number of affected rows.
-ExecuteScalar (with IDbTransaction): Executes a command within a transaction and returns the first column of the first row in the result set returned by the query.
-ExecuteReader (with IDbTransaction): Executes a command within a transaction and returns a data reader.
-ExecuteNonQuery (with IDbTransaction): Executes a command within a transaction and returns the number of affected rows.
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  },
+  "XMS": {
+    "Trace": {
+      "Level": "Information",
+      "Listeners": [
+        {
+          "Name": "Console",
+          "Type": "Console",
+          "Filter": null
+        }
+      ]
+    }
+  }
+}
