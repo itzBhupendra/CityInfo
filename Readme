@@ -1,51 +1,63 @@
-public class DatabaseLogger : ILogger
+using Microsoft.Extensions.Logging;
+using System;
+
+public class CustomLoggerProvider : ILoggerProvider
 {
-    private readonly ILogger _logger;
+    private readonly Func<string, LogLevel, bool> _filter;
 
-    public DatabaseLogger(ILogger logger)
+    public CustomLoggerProvider(Func<string, LogLevel, bool> filter)
     {
-        _logger = logger;
+        _filter = filter ?? ((category, logLevel) => true);
     }
 
-    public IDisposable BeginScope<TState>(TState state)
+    public ILogger CreateLogger(string categoryName)
     {
-        return _logger.BeginScope(state);
+        return new CustomLogger(categoryName, _filter);
     }
 
-    public bool IsEnabled(LogLevel logLevel)
+    public void Dispose()
     {
-        return _logger.IsEnabled(logLevel);
-    }
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-    {
-        // Implement database logging logic
-        _logger.Log(logLevel, eventId, state, exception, formatter);
+        // Dispose any resources if needed
     }
 }
 
-public class FileLogger : ILogger
+public class CustomLogger : ILogger
 {
-    private readonly ILogger _logger;
+    private readonly string _categoryName;
+    private readonly Func<string, LogLevel, bool> _filter;
 
-    public FileLogger(ILogger logger)
+    public CustomLogger(string categoryName, Func<string, LogLevel, bool> filter)
     {
-        _logger = logger;
+        _categoryName = categoryName;
+        _filter = filter;
     }
 
     public IDisposable BeginScope<TState>(TState state)
     {
-        return _logger.BeginScope(state);
+        return NoopDisposable.Instance;
     }
 
     public bool IsEnabled(LogLevel logLevel)
     {
-        return _logger.IsEnabled(logLevel);
+        return _filter(_categoryName, logLevel);
     }
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
     {
-        // Implement file logging logic
-        _logger.Log(logLevel, eventId, state, exception, formatter);
+        if (!IsEnabled(logLevel))
+        {
+            return;
+        }
+
+        // Implement your logging logic here
+    }
+
+    private class NoopDisposable : IDisposable
+    {
+        public static NoopDisposable Instance = new NoopDisposable();
+
+        public void Dispose()
+        {
+        }
     }
 }
