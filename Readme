@@ -1,63 +1,38 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System;
 
-public class CustomLoggerProvider : ILoggerProvider
+public class Program
 {
-    private readonly Func<string, LogLevel, bool> _filter;
-
-    public CustomLoggerProvider(Func<string, LogLevel, bool> filter)
+    public static void Main(string[] args)
     {
-        _filter = filter ?? ((category, logLevel) => true);
+        CreateHostBuilder(args).Build().Run();
     }
 
-    public ILogger CreateLogger(string categoryName)
-    {
-        return new CustomLogger(categoryName, _filter);
-    }
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureLogging((context, logging) =>
+            {
+                logging.ClearProviders(); // Clear existing logging providers
+                logging.AddConsole(); // Add console logger as an example
 
-    public void Dispose()
-    {
-        // Dispose any resources if needed
-    }
-}
+                // Register the Func<string, LogLevel, bool> dependency
+                logging.Services.AddSingleton<Func<string, LogLevel, bool>>(provider =>
+                {
+                    var configuration = provider.GetRequiredService<IConfiguration>(); // If you are using IConfiguration for filtering
 
-public class CustomLogger : ILogger
-{
-    private readonly string _categoryName;
-    private readonly Func<string, LogLevel, bool> _filter;
+                    return (category, logLevel) =>
+                    {
+                        // Implement your filtering logic here
+                        // For example, you can read filtering criteria from configuration and apply them here
+                        return true; // Return true for all log messages for now
+                    };
+                });
 
-    public CustomLogger(string categoryName, Func<string, LogLevel, bool> filter)
-    {
-        _categoryName = categoryName;
-        _filter = filter;
-    }
-
-    public IDisposable BeginScope<TState>(TState state)
-    {
-        return NoopDisposable.Instance;
-    }
-
-    public bool IsEnabled(LogLevel logLevel)
-    {
-        return _filter(_categoryName, logLevel);
-    }
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-    {
-        if (!IsEnabled(logLevel))
-        {
-            return;
-        }
-
-        // Implement your logging logic here
-    }
-
-    private class NoopDisposable : IDisposable
-    {
-        public static NoopDisposable Instance = new NoopDisposable();
-
-        public void Dispose()
-        {
-        }
-    }
+                logging.AddCustomProvider(); // Add custom logger provider
+            })
+            .ConfigureWebHostDefaults(webBuilder =>
+            {
+                webBuilder.UseStartup<Startup>(); // Replace Startup with your actual startup class if using ASP.NET Core
+            });
 }
