@@ -1,34 +1,51 @@
-using Microsoft.Extensions.Logging;
-
-public class CustomLoggerProvider : ILoggerProvider
+public class DatabaseLogger : ILogger
 {
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger _logger;
 
-    public CustomLoggerProvider(ILoggerFactory loggerFactory)
+    public DatabaseLogger(ILogger logger)
     {
-        _loggerFactory = loggerFactory;
+        _logger = logger;
     }
 
-    public ILogger CreateLogger(string categoryName)
+    public IDisposable BeginScope<TState>(TState state)
     {
-        // Return different logger instances based on the asked value
-        if (categoryName == "Database")
-        {
-            return new DatabaseLogger(_loggerFactory.CreateLogger("Database"));
-        }
-        else if (categoryName == "File")
-        {
-            return new FileLogger(_loggerFactory.CreateLogger("File"));
-        }
-        else
-        {
-            // Return a default logger instance if no specific category is matched
-            return _loggerFactory.CreateLogger(categoryName);
-        }
+        return _logger.BeginScope(state);
     }
 
-    public void Dispose()
+    public bool IsEnabled(LogLevel logLevel)
     {
-        // Dispose any resources if needed
+        return _logger.IsEnabled(logLevel);
+    }
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+    {
+        // Implement database logging logic
+        _logger.Log(logLevel, eventId, state, exception, formatter);
+    }
+}
+
+public class FileLogger : ILogger
+{
+    private readonly ILogger _logger;
+
+    public FileLogger(ILogger logger)
+    {
+        _logger = logger;
+    }
+
+    public IDisposable BeginScope<TState>(TState state)
+    {
+        return _logger.BeginScope(state);
+    }
+
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return _logger.IsEnabled(logLevel);
+    }
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+    {
+        // Implement file logging logic
+        _logger.Log(logLevel, eventId, state, exception, formatter);
     }
 }
