@@ -1,38 +1,95 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Threading.Tasks;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        CreateHostBuilder(args).Build().Run();
+        var host = CreateHostBuilder(args).Build();
+        
+        // Run your application logic here
+        
+        await host.RunAsync();
     }
 
     public static IHostBuilder CreateHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
+            .ConfigureServices((hostContext, services) =>
+            {
+                services.AddScoped<IDataAccessCommandService, DataAccessCommandService>();
+            })
             .ConfigureLogging((context, logging) =>
             {
                 logging.ClearProviders(); // Clear existing logging providers
                 logging.AddConsole(); // Add console logger as an example
 
-                // Register the Func<string, LogLevel, bool> dependency
-                logging.Services.AddSingleton<Func<string, LogLevel, bool>>(provider =>
+                logging.Services.AddSingleton<Func<IDataAccessCommandService>>(provider =>
                 {
-                    var configuration = provider.GetRequiredService<IConfiguration>(); // If you are using IConfiguration for filtering
-
-                    return (category, logLevel) =>
+                    var serviceProvider = provider.GetRequiredService<IServiceProvider>();
+                    return () =>
                     {
-                        // Implement your filtering logic here
-                        // For example, you can read filtering criteria from configuration and apply them here
-                        return true; // Return true for all log messages for now
+                        using (var scope = serviceProvider.CreateScope())
+                        {
+                            return scope.ServiceProvider.GetRequiredService<IDataAccessCommandService>();
+                        }
                     };
                 });
 
-                logging.AddCustomProvider(); // Add custom logger provider
+                logging.Services.AddSingleton<ILoggerProvider, CustomLoggerProvider>();
             })
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseStartup<Startup>(); // Replace Startup with your actual startup class if using ASP.NET Core
             });
+}
+
+public interface IDataAccessCommandService
+{
+    Task ExecuteAsync();
+}
+
+public class DataAccessCommandService : IDataAccessCommandService
+{
+    public async Task ExecuteAsync()
+    {
+        // Execute data access command
+        await Task.Delay(1000);
+        Console.WriteLine("Data access command executed.");
+    }
+}
+
+public class CustomLoggerProvider : ILoggerProvider
+{
+    private readonly Func<IDataAccessCommandService> _dataAccessCommandServiceFactory;
+
+    public CustomLoggerProvider(Func<IDataAccessCommandService> dataAccessCommandServiceFactory)
+    {
+        _dataAccessCommandServiceFactory = dataAccessCommandServiceFactory;
+    }
+
+    public ILogger CreateLogger(string categoryName)
+    {
+        var dataAccessCommandService = _dataAccessCommandServiceFactory();
+        return new CustomLogger(dataAccessCommandService);
+    }
+
+    public void Dispose()
+    {
+        // Dispose any resources if needed
+    }
+}
+
+public class CustomLogger : ILogger
+{
+    private readonly IDataAccessCommandService _dataAccessCommandService;
+
+    public CustomLogger(IDataAccessCommandService dataAccessCommandService)
+    {
+        _dataAccessCommandService = dataAccessCommandService;
+    }
+
+    // Implement ILogger methods
 }
