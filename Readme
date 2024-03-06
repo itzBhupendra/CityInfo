@@ -1,95 +1,20 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Threading.Tasks;
+Architecture:
+The architecture of the QLogger system follows a layered approach, with distinct components responsible for different aspects of logging functionality. Key architectural patterns such as dependency injection and provider pattern are utilized to promote modularity, testability, and maintainability.
 
-public class Program
-{
-    public static async Task Main(string[] args)
-    {
-        var host = CreateHostBuilder(args).Build();
-        
-        // Run your application logic here
-        
-        await host.RunAsync();
-    }
+Logging Framework:
+The system leverages the Microsoft.Extensions.Logging framework, a flexible and extensible logging abstraction that allows for seamless integration with various logging providers and sinks. This framework provides a unified logging API that abstracts away the underlying logging implementation, making it easy to switch between different logging providers without impacting application code.
 
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .ConfigureServices((hostContext, services) =>
-            {
-                services.AddScoped<IDataAccessCommandService, DataAccessCommandService>();
-            })
-            .ConfigureLogging((context, logging) =>
-            {
-                logging.ClearProviders(); // Clear existing logging providers
-                logging.AddConsole(); // Add console logger as an example
+Database Integration:
+For database logging functionality, the QLogger system integrates with SQL Server or any other database provider compatible with .NET Core. Log data is stored in a designated database table, allowing for easy querying, analysis, and reporting of log events. The IDbLogger interface defines a standard contract for logging messages to the database, providing a decoupled and extensible approach to database logging.
 
-                logging.Services.AddSingleton<Func<IDataAccessCommandService>>(provider =>
-                {
-                    var serviceProvider = provider.GetRequiredService<IServiceProvider>();
-                    return () =>
-                    {
-                        using (var scope = serviceProvider.CreateScope())
-                        {
-                            return scope.ServiceProvider.GetRequiredService<IDataAccessCommandService>();
-                        }
-                    };
-                });
+File Logging:
+In addition to database logging, the QLogger system supports file logging, allowing log messages to be written to text-based log files. The FileLogger class provides a simple and efficient mechanism for recording log events to designated log files, with support for customizable log file formatting and rotation strategies.
 
-                logging.Services.AddSingleton<ILoggerProvider, CustomLoggerProvider>();
-            })
-            .ConfigureWebHostDefaults(webBuilder =>
-            {
-                webBuilder.UseStartup<Startup>(); // Replace Startup with your actual startup class if using ASP.NET Core
-            });
-}
+Dependencies:
+The QLogger system relies on a minimal set of dependencies, including the .NET Core framework and Microsoft.Extensions.Logging library. Additional dependencies may include database drivers (e.g., for SQL Server) and utility libraries for file I/O operations and logging configuration.
 
-public interface IDataAccessCommandService
-{
-    Task ExecuteAsync();
-}
+Scalability and Performance Considerations:
+The QLogger system is designed to handle high volumes of log data efficiently, with optimizations for performance and scalability. Asynchronous logging techniques are employed to minimize blocking and maximize throughput, ensuring minimal impact on application performance even under heavy load.
 
-public class DataAccessCommandService : IDataAccessCommandService
-{
-    public async Task ExecuteAsync()
-    {
-        // Execute data access command
-        await Task.Delay(1000);
-        Console.WriteLine("Data access command executed.");
-    }
-}
-
-public class CustomLoggerProvider : ILoggerProvider
-{
-    private readonly Func<IDataAccessCommandService> _dataAccessCommandServiceFactory;
-
-    public CustomLoggerProvider(Func<IDataAccessCommandService> dataAccessCommandServiceFactory)
-    {
-        _dataAccessCommandServiceFactory = dataAccessCommandServiceFactory;
-    }
-
-    public ILogger CreateLogger(string categoryName)
-    {
-        var dataAccessCommandService = _dataAccessCommandServiceFactory();
-        return new CustomLogger(dataAccessCommandService);
-    }
-
-    public void Dispose()
-    {
-        // Dispose any resources if needed
-    }
-}
-
-public class CustomLogger : ILogger
-{
-    private readonly IDataAccessCommandService _dataAccessCommandService;
-
-    public CustomLogger(IDataAccessCommandService dataAccessCommandService)
-    {
-        _dataAccessCommandService = dataAccessCommandService;
-    }
-
-    // Implement ILogger methods
-}
+Future Directions:
+In future iterations of the QLogger system, enhancements may include support for additional logging sinks (e.g., cloud-based logging services), improved error handling and retry mechanisms, and integration with monitoring and analytics tools for comprehensive logging and analysis capabilities. Additionally, optimizations for scalability and performance may be further explored to ensure seamless operation in large-scale and distributed environments.
