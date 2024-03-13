@@ -1,28 +1,32 @@
-File I/O Errors: Errors related to file operations, such as file not found, permission denied, or disk full errors, can occur during file logging operations.
-Database Errors: Errors related to database connectivity, SQL query execution, or database server issues can occur during database logging operations.
-Transient Errors: Temporary errors, such as network timeouts or temporary unavailability of resources, can occur sporadically and may resolve on subsequent attempts.
-Configuration Errors: Errors related to misconfiguration of logging settings, invalid connection strings, or incorrect file paths can lead to logging failures.
-Error Handling Strategies:
-Exception Handling: Implement try-catch blocks to catch and handle exceptions that occur during logging operations. Handle specific types of exceptions separately to apply appropriate error recovery strategies.
+using IBM.XMS;
+using System.Security.Cryptography.X509Certificates;
 
-Retry Mechanisms: Implement retry logic to retry failed logging operations in case of transient errors. Use exponential backoff algorithms to progressively increase delay between retries and prevent overloading of resources.
+class Program
+{
+    static void Main(string[] args)
+    {
+        // Set connection properties
+        XMSFactoryFactory xff = XMSFactoryFactory.GetInstance(XMSC.CT_WMQ);
+        IConnectionFactory cf = xff.CreateConnectionFactory();
+        cf.SetStringProperty(XMSC.WMQ_HOST_NAME, "localhost");
+        cf.SetIntProperty(XMSC.WMQ_PORT, 1414);
+        cf.SetStringProperty(XMSC.WMQ_CHANNEL, "CHANNEL_NAME");
+        cf.SetStringProperty(XMSC.WMQ_QUEUE_MANAGER, "QUEUE_MANAGER_NAME");
 
-Fallback Mechanisms: Provide fallback mechanisms to gracefully degrade logging functionality in case of severe errors or complete failure of primary logging mechanisms. For example, switch to alternative logging sinks or write log messages to a fallback location.
+        // Set SSL/TLS properties
+        cf.SetStringProperty(XMSC.WMQ_SSL_CIPHER_SPEC, "TLS_RSA_WITH_AES_256_CBC_SHA256");
 
-Logging and Alerting: Log error messages and exceptions encountered during error handling process to aid in troubleshooting and debugging. Implement alerting mechanisms to notify administrators or support personnel of critical errors or failures.
+        // Use certificates from the Windows Certificate Store (*SYSTEM)
+        cf.SetStringProperty(XMSC.WMQ_SSL_CERT_STORE, "*SYSTEM");
 
-Best Practices:
-Logging Consistency: Ensure consistent logging of error messages and exceptions across all components of the logging system. Use standardized error message formats and severity levels for easy identification and analysis.
+        // Optional: Specify the client certificate subject name
+        // cf.SetStringProperty(XMSC.WMQ_SSL_CERT_SUBJECT, "CN=ClientCertificate");
 
-Error Recovery: Implement proactive error recovery mechanisms to automatically recover from common errors without manual intervention. For example, retry failed database connections or recreate log files if they become corrupted.
-
-Monitoring and Metrics: Monitor the health and performance of the logging system using metrics and telemetry data. Track error rates, latency, and throughput to identify potential issues and optimize system performance.
-
-Logging of Error Context: Include contextual information, such as timestamps, error codes, and stack traces, in error log messages to facilitate diagnosis and resolution of errors. Provide sufficient details to enable root cause analysis and troubleshooting.
-
-Conclusion:
-Technical error handling is a critical aspect of ensuring the reliability and resilience of logging systems like QLogger. By implementing robust error handling strategies and best practices, developers can enhance the fault tolerance and stability of the logging system, thereby improving the overall reliability and performance of the application.
-
-
-
-
+        // Create connection and session
+        using (IConnection connection = cf.CreateConnection())
+        using (ISession session = connection.CreateSession(false, AcknowledgeMode.AutoAcknowledge))
+        {
+            // Your MQ operations here...
+        }
+    }
+}
