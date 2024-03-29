@@ -1,32 +1,31 @@
-using IBM.XMS;
-using System.Security.Cryptography.X509Certificates;
-
-class Program
-{
-    static void Main(string[] args)
-    {
-        // Set connection properties
-        XMSFactoryFactory xff = XMSFactoryFactory.GetInstance(XMSC.CT_WMQ);
-        IConnectionFactory cf = xff.CreateConnectionFactory();
-        cf.SetStringProperty(XMSC.WMQ_HOST_NAME, "localhost");
-        cf.SetIntProperty(XMSC.WMQ_PORT, 1414);
-        cf.SetStringProperty(XMSC.WMQ_CHANNEL, "CHANNEL_NAME");
-        cf.SetStringProperty(XMSC.WMQ_QUEUE_MANAGER, "QUEUE_MANAGER_NAME");
-
-        // Set SSL/TLS properties
-        cf.SetStringProperty(XMSC.WMQ_SSL_CIPHER_SPEC, "TLS_RSA_WITH_AES_256_CBC_SHA256");
-
-        // Use certificates from the Windows Certificate Store (*SYSTEM)
-        cf.SetStringProperty(XMSC.WMQ_SSL_CERT_STORE, "*SYSTEM");
-
-        // Optional: Specify the client certificate subject name
-        // cf.SetStringProperty(XMSC.WMQ_SSL_CERT_SUBJECT, "CN=ClientCertificate");
-
-        // Create connection and session
-        using (IConnection connection = cf.CreateConnection())
-        using (ISession session = connection.CreateSession(false, AcknowledgeMode.AutoAcknowledge))
-        {
-            // Your MQ operations here...
-        }
-    }
-}
+1. Client Application on Desktop:
+The client application running on desktop devices serves as the primary interface for end-users to interact with the system.
+It communicates with the backend services to perform various operations such as data retrieval, updates, and processing.
+2. Existing Services and Batch Jobs on App Server:
+The application server hosts existing services and batch jobs that perform backend processing and data manipulation tasks.
+These services may include legacy components or custom applications responsible for specific business logic or data processing.
+Batch jobs are scheduled tasks that run at specified intervals to perform automated data processing, reporting, or maintenance tasks.
+3. IIS Web Farm Services:
+The IIS web farm consists of multiple servers running Internet Information Services (IIS) to host web applications and services.
+These servers host services such as the Business API, Letter Service, Mainframe Service, DoC Service, and DAL Service.
+Each service exposes endpoints for performing specific operations and interacts with the client application and other backend components.
+4. Database Server:
+The database server stores and manages persistent data used by the system.
+It hosts one or more databases that store application data, configuration settings, and transaction logs.
+The database server is accessed by backend services and batch jobs to read and write data, ensuring data consistency and integrity.
+5. Communication and Integration:
+Communication between components occurs via HTTP(S) protocols for client-server interactions and inter-service communication.
+The client application communicates with the backend services through RESTful APIs or other communication protocols.
+Integration between existing services, batch jobs, and IIS web farm services may involve message queues, file transfers, or direct database access.
+6. Security and Access Control:
+Security measures such as authentication, authorization, and data encryption are implemented to protect sensitive data and ensure secure communication.
+Access control mechanisms restrict access to resources based on user roles and permissions, preventing unauthorized access to confidential information.
+7. Logging and Monitoring:
+Logging mechanisms capture events, errors, and performance metrics from all components, providing visibility into system behavior and troubleshooting capabilities.
+Monitoring tools track system health, performance metrics, and resource utilization, allowing proactive management and optimization of the system.
+8. Scalability and Redundancy:
+The architecture is designed for scalability, allowing additional servers to be added to the IIS web farm or application server cluster to handle increased load.
+Redundancy and failover mechanisms ensure high availability and fault tolerance, minimizing downtime and service disruptions.
+9. Conclusion:
+The high-level architecture provides a robust and scalable platform for delivering services to end-users while ensuring data integrity, security, and performance.
+By leveraging desktop client applications, existing services, IIS web farm services, and database servers, the system can efficiently handle diverse workloads and meet the needs of the organization.
