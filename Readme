@@ -1,69 +1,31 @@
 using System;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+using System.ComponentModel.DataAnnotations;
 
-class Program
+public class AtLeastOnePropertyRequiredAttribute : ValidationAttribute
 {
-    static void Main(string[] args)
+    private readonly string[] propertyNames;
+
+    public AtLeastOnePropertyRequiredAttribute(params string[] propertyNames)
     {
-        CreateWebHostBuilder(args).Build().Run();
+        this.propertyNames = propertyNames;
     }
 
-    public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-        WebHost.CreateDefaultBuilder(args)
-            .ConfigureServices(services =>
-            {
-                services.AddHttpClient();
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-
-                app.Use(async (context, next) =>
-                {
-                    // Retrieve Correlation ID from HTTP header
-                    string correlationId = context.Request.Headers["Correlation-ID"];
-                    if (string.IsNullOrEmpty(correlationId))
-                    {
-                        correlationId = Guid.NewGuid().ToString();
-                        context.Request.Headers.Add("Correlation-ID", correlationId);
-                    }
-
-                    // Log Correlation ID
-                    Console.WriteLine($"Service 2 received request with Correlation ID: {correlationId}");
-
-                    await next();
-                });
-
-                app.UseEndpoints(endpoints =>
-                {
-                    endpoints.MapGet("/", async context =>
-                    {
-                        await context.Response.WriteAsync("Service 2 endpoint reached successfully");
-                    });
-                });
-            });
-
-    public class CorrelationIdHandler : DelegatingHandler
+    protected override ValidationResult IsValid(object value, ValidationContext validationContext)
     {
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        var instance = validationContext.ObjectInstance;
+        var type = validationContext.ObjectType;
+
+        foreach (var propertyName in propertyNames)
         {
-            string correlationId = request.Headers.GetValues("Correlation-ID").FirstOrDefault();
+            var propertyInfo = type.GetProperty(propertyName);
+            if (propertyInfo == null)
+                throw new ArgumentException($"Property '{propertyName}' not found on '{type}'");
 
-            if (string.IsNullOrEmpty(correlationId))
-            {
-                correlationId = Guid.NewGuid().ToString();
-                request.Headers.Add("Correlation-ID", correlationId);
-            }
-
-            Console.WriteLine($"Correlation ID added to outgoing request to Service 3: {correlationId}");
-
-            return await base.SendAsync(request, cancellationToken);
+            var propertyValue = propertyInfo.GetValue(instance);
+            if (propertyValue != null && !string.IsNullOrWhiteSpace(propertyValue.ToString()))
+                return ValidationResult.Success;
         }
+
+        return new ValidationResult(ErrorMessage ?? "At least one property is required.");
     }
 }
