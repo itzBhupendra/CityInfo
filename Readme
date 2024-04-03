@@ -1,19 +1,63 @@
-Technology Stack:
+using System;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
-The architecture and implementation of our system leverage a diverse set of technologies to achieve robustness, scalability, and flexibility across various components. Below is an overview of the key technologies used:
+class Program
+{
+    static void Main(string[] args)
+    {
+        CreateWebHostBuilder(args).Build().Run();
+    }
 
-Programming Languages and Frameworks:
+    public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
+        WebHost.CreateDefaultBuilder(args)
+            .ConfigureServices(services =>
+            {
+                services.AddHttpClient();
+            })
+            .Configure(app =>
+            {
+                app.UseRouting();
 
-C# (.NET Core): Our backend services, including the Business API, Letter Service, Mainframe Service, DoC Service, and DAL Service, are developed using C# programming language and the .NET Core framework. .NET Core offers cross-platform support, performance optimization, and extensive libraries for building scalable and efficient web applications.
-ASP.NET Core: The backend services are built as ASP.NET Core Web APIs, providing a lightweight and high-performance framework for developing RESTful APIs.
-Web Server and Hosting:
+                app.Use(async (context, next) =>
+                {
+                    // Retrieve Correlation ID from HTTP header
+                    string correlationId = context.Request.Headers["Correlation-ID"];
+                    if (string.IsNullOrEmpty(correlationId))
+                    {
+                        correlationId = Guid.NewGuid().ToString();
+                        context.Request.Headers.Add("Correlation-ID", correlationId);
+                    }
 
-Internet Information Services (IIS): The IIS web server is utilized to host our web applications and services in the IIS web farm environment. IIS offers robust features for web hosting, scalability, and security.
-IIS Web Farm: Multiple instances of IIS servers are configured in a web farm to distribute incoming traffic, ensure high availability, and enable horizontal scalability of our web applications and services.
-Database Management:
+                    // Log Correlation ID
+                    Console.WriteLine($"Service 2 received request with Correlation ID: {correlationId}");
 
-Microsoft SQL Server: Our system utilizes Microsoft SQL Server as the primary relational database management system (RDBMS) for storing and managing persistent data. SQL Server offers advanced features for data integrity, scalability, and performance optimization.
-Entity Framework Core: Entity Framework Core is used as an Object-Relational Mapping (ORM) framework for accessing and manipulating data in SQL Server databases. It provides a simplified data access layer and facilitates database operations using object-oriented programming concepts.
-Continuous Integration/Continuous Deployment (CI/CD):
+                    await next();
+                });
 
-Azure DevOps: Azure DevOps is employed as the CI/CD platform for automating the build, test, and deployment processes of our software applications. It offers integrated tools for version control, build automation, release management, and agile project management.
+                app.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapGet("/", async context =>
+                    {
+                        await PassCorrelationIdToService3(context);
+                        await context.Response.WriteAsync("Service 2 endpoint reached successfully");
+                    });
+                });
+            });
+
+    static async Task PassCorrelationIdToService3(HttpContext context)
+    {
+        string correlationId = context.Request.Headers["Correlation-ID"];
+
+        var httpClientFactory = context.RequestServices.GetRequiredService<IHttpClientFactory>();
+        var client = httpClientFactory.CreateClient();
+
+        client.DefaultRequestHeaders.Add("Correlation-ID", correlationId);
+        var response = await client.GetAsync("http://service3endpoint");
+        response.EnsureSuccessStatusCode();
+
+        Console.WriteLine($"Correlation ID passed to Service 3: {correlationId}");
+    }
+}
