@@ -1,4 +1,7 @@
 using System;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -41,23 +44,26 @@ class Program
                 {
                     endpoints.MapGet("/", async context =>
                     {
-                        await PassCorrelationIdToService3(context);
                         await context.Response.WriteAsync("Service 2 endpoint reached successfully");
                     });
                 });
             });
 
-    static async Task PassCorrelationIdToService3(HttpContext context)
+    public class CorrelationIdHandler : DelegatingHandler
     {
-        string correlationId = context.Request.Headers["Correlation-ID"];
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            string correlationId = request.Headers.GetValues("Correlation-ID").FirstOrDefault();
 
-        var httpClientFactory = context.RequestServices.GetRequiredService<IHttpClientFactory>();
-        var client = httpClientFactory.CreateClient();
+            if (string.IsNullOrEmpty(correlationId))
+            {
+                correlationId = Guid.NewGuid().ToString();
+                request.Headers.Add("Correlation-ID", correlationId);
+            }
 
-        client.DefaultRequestHeaders.Add("Correlation-ID", correlationId);
-        var response = await client.GetAsync("http://service3endpoint");
-        response.EnsureSuccessStatusCode();
+            Console.WriteLine($"Correlation ID added to outgoing request to Service 3: {correlationId}");
 
-        Console.WriteLine($"Correlation ID passed to Service 3: {correlationId}");
+            return await base.SendAsync(request, cancellationToken);
+        }
     }
 }
