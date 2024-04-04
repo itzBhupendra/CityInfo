@@ -1,31 +1,25 @@
-using System;
-using System.ComponentModel.DataAnnotations;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
-public class AtLeastOnePropertyRequiredAttribute : ValidationAttribute
+public class CorrelationIdMiddleware
 {
-    private readonly string[] propertyNames;
+    private readonly RequestDelegate _next;
+    private readonly HttpClient _httpClient;
+    private readonly ICorrelationIdService _correlationIdService;
 
-    public AtLeastOnePropertyRequiredAttribute(params string[] propertyNames)
+    public CorrelationIdMiddleware(RequestDelegate next, IHttpClientFactory httpClientFactory, ICorrelationIdService correlationIdService)
     {
-        this.propertyNames = propertyNames;
+        _next = next;
+        _httpClient = httpClientFactory.CreateClient();
+        _correlationIdService = correlationIdService;
     }
 
-    protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+    public async Task Invoke(HttpContext context)
     {
-        var instance = validationContext.ObjectInstance;
-        var type = validationContext.ObjectType;
+        var correlationId = context.Request.Headers["CorrelationId"].ToString();
+        _correlationIdService.CorrelationId = correlationId;
 
-        foreach (var propertyName in propertyNames)
-        {
-            var propertyInfo = type.GetProperty(propertyName);
-            if (propertyInfo == null)
-                throw new ArgumentException($"Property '{propertyName}' not found on '{type}'");
-
-            var propertyValue = propertyInfo.GetValue(instance);
-            if (propertyValue != null && !string.IsNullOrWhiteSpace(propertyValue.ToString()))
-                return ValidationResult.Success;
-        }
-
-        return new ValidationResult(ErrorMessage ?? "At least one property is required.");
+        await _next(context);
     }
 }
