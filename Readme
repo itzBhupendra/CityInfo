@@ -1,25 +1,39 @@
-using System.Net.Http;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System;
+using System.Threading.Tasks;
 
-public class CorrelationIdMiddleware
+public class HeaderValidationMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly HttpClient _httpClient;
-    private readonly ICorrelationIdService _correlationIdService;
+    private readonly string[] _requiredHeaders;
 
-    public CorrelationIdMiddleware(RequestDelegate next, IHttpClientFactory httpClientFactory, ICorrelationIdService correlationIdService)
+    public HeaderValidationMiddleware(RequestDelegate next, string[] requiredHeaders)
     {
         _next = next;
-        _httpClient = httpClientFactory.CreateClient();
-        _correlationIdService = correlationIdService;
+        _requiredHeaders = requiredHeaders;
     }
 
     public async Task Invoke(HttpContext context)
     {
-        var correlationId = context.Request.Headers["CorrelationId"].ToString();
-        _correlationIdService.CorrelationId = correlationId;
+        foreach (var header in _requiredHeaders)
+        {
+            if (!context.Request.Headers.ContainsKey(header))
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsync($"Missing required header: {header}");
+                return;
+            }
+        }
 
         await _next(context);
+    }
+}
+
+public static class HeaderValidationMiddlewareExtensions
+{
+    public static IApplicationBuilder UseHeaderValidation(this IApplicationBuilder builder, params string[] requiredHeaders)
+    {
+        return builder.UseMiddleware<HeaderValidationMiddleware>(requiredHeaders);
     }
 }
