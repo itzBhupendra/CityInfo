@@ -1,35 +1,35 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Data.SqlClient; // or your preferred database provider
-using Dapper;
+
+public class Record
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Category { get; set; }
+}
 
 public class DataAccess
 {
-    private readonly IDbConnection _connection;
-
-    public DataAccess(IDbConnection connection)
+    public List<List<Record>> SplitRecordToHierarchies(List<Record> records, Func<Record, string> splitCriteria)
     {
-        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-    }
+        var hierarchies = new Dictionary<string, List<Record>>();
 
-    public Dictionary<string, int> QueryMultiple(string sql)
-    {
-        using (var multi = _connection.QueryMultiple(sql))
+        foreach (var record in records)
         {
-            var results = new Dictionary<string, int>();
-
-            for (int i = 0; i < int.MaxValue; i++)
+            var criteria = splitCriteria(record);
+            if (!hierarchies.ContainsKey(criteria))
             {
-                // Try reading each result set until there are no more
-                var hasNextResult = multi.NextResult();
-                if (!hasNextResult) break;
-
-                var resultName = $"Result{i + 1}";
-                results[resultName] = multi.Read<dynamic>().Count;
+                hierarchies[criteria] = new List<Record>();
             }
-
-            return results;
+            hierarchies[criteria].Add(record);
         }
+
+        var result = new List<List<Record>>();
+        foreach (var hierarchy in hierarchies.Values)
+        {
+            result.Add(hierarchy);
+        }
+
+        return result;
     }
 }
