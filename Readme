@@ -1,39 +1,35 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using System;
-using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient; // or your preferred database provider
+using Dapper;
 
-public class HeaderValidationMiddleware
+public class DataAccess
 {
-    private readonly RequestDelegate _next;
-    private readonly string[] _requiredHeaders;
+    private readonly IDbConnection _connection;
 
-    public HeaderValidationMiddleware(RequestDelegate next, string[] requiredHeaders)
+    public DataAccess(IDbConnection connection)
     {
-        _next = next;
-        _requiredHeaders = requiredHeaders;
+        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
     }
 
-    public async Task Invoke(HttpContext context)
+    public Dictionary<string, int> QueryMultiple(string sql)
     {
-        foreach (var header in _requiredHeaders)
+        using (var multi = _connection.QueryMultiple(sql))
         {
-            if (!context.Request.Headers.ContainsKey(header))
+            var results = new Dictionary<string, int>();
+
+            for (int i = 0; i < int.MaxValue; i++)
             {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsync($"Missing required header: {header}");
-                return;
+                // Try reading each result set until there are no more
+                var hasNextResult = multi.NextResult();
+                if (!hasNextResult) break;
+
+                var resultName = $"Result{i + 1}";
+                results[resultName] = multi.Read<dynamic>().Count;
             }
+
+            return results;
         }
-
-        await _next(context);
-    }
-}
-
-public static class HeaderValidationMiddlewareExtensions
-{
-    public static IApplicationBuilder UseHeaderValidation(this IApplicationBuilder builder, params string[] requiredHeaders)
-    {
-        return builder.UseMiddleware<HeaderValidationMiddleware>(requiredHeaders);
     }
 }
