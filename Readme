@@ -1,35 +1,49 @@
-using System;
-using System.Collections.Generic;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Moq;
+using NUnit.Framework;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
 
-public class Record
+[TestFixture]
+public class IntegrationTests
 {
-    public int Id { get; set; }
-    public string Name { get; set; }
-    public string Category { get; set; }
-}
+    private WebApplicationFactory<Program> _factory;
 
-public class DataAccess
-{
-    public List<List<Record>> SplitRecordToHierarchies(List<Record> records, Func<Record, string> splitCriteria)
+    [SetUp]
+    public void SetUp()
     {
-        var hierarchies = new Dictionary<string, List<Record>>();
+        _factory = new WebApplicationFactory<Program>();
+    }
 
-        foreach (var record in records)
+    [TearDown]
+    public void TearDown()
+    {
+        _factory.Dispose();
+    }
+
+    [Test]
+    public async Task ExternalServiceException_HandledByMiddleware()
+    {
+        // Arrange
+        var mockDataAccessApi = new Mock<IDataAccessApi>();
+        mockDataAccessApi.Setup(x => x.MethodThatThrowsException())
+                         .Throws(new Exception("Simulated exception from data access API"));
+
+        var client = _factory.WithWebHostBuilder(builder =>
         {
-            var criteria = splitCriteria(record);
-            if (!hierarchies.ContainsKey(criteria))
+            builder.ConfigureServices(services =>
             {
-                hierarchies[criteria] = new List<Record>();
-            }
-            hierarchies[criteria].Add(record);
-        }
+                // Replace IDataAccessApi registration with the mocked instance
+                services.AddSingleton(mockDataAccessApi.Object);
+            });
+        }).CreateClient();
 
-        var result = new List<List<Record>>();
-        foreach (var hierarchy in hierarchies.Values)
-        {
-            result.Add(hierarchy);
-        }
+        // Act
+        var response = await client.GetAsync("/your-api-endpoint");
 
-        return result;
+        // Assert
+        Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
+        // Add more assertions as needed
     }
 }
