@@ -1,49 +1,33 @@
-using Microsoft.AspNetCore.Mvc.Testing;
-using Moq;
-using NUnit.Framework;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-
-[TestFixture]
 public class IntegrationTests
 {
-    private WebApplicationFactory<Program> _factory;
+    private readonly TestServer _server;
+    private readonly HttpClient _client;
 
-    [SetUp]
-    public void SetUp()
+    public IntegrationTests()
     {
-        _factory = new WebApplicationFactory<Program>();
+        // Set up test server with your ASP.NET Core application startup class
+        _server = new TestServer(new WebApplicationFactory<Startup>());
+        _client = _server.CreateClient();
     }
 
-    [TearDown]
-    public void TearDown()
-    {
-        _factory.Dispose();
-    }
-
-    [Test]
-    public async Task ExternalServiceException_HandledByMiddleware()
+    [Fact]
+    public async Task MyAction_ReturnsInternalServerError_WhenServiceThrowsException()
     {
         // Arrange
-        var mockDataAccessApi = new Mock<IDataAccessApi>();
-        mockDataAccessApi.Setup(x => x.MethodThatThrowsException())
-                         .Throws(new Exception("Simulated exception from data access API"));
-
-        var client = _factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                // Replace IDataAccessApi registration with the mocked instance
-                services.AddSingleton(mockDataAccessApi.Object);
-            });
-        }).CreateClient();
+        var mockService = new Mock<IMyService>();
+        mockService.Setup(s => s.SomeMethod()).Throws(new Exception("Something went wrong"));
+        // Use DI container to replace the actual service with the mock
+        _server.Host
+            .Services
+            .GetRequiredService<IMyService>()
+            .Returns(mockService.Object);
 
         // Act
-        var response = await client.GetAsync("/your-api-endpoint");
+        var response = await _client.GetAsync("/api/mycontroller/myaction");
 
         // Assert
-        Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
-        // Add more assertions as needed
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Something went wrong", content);
     }
 }
