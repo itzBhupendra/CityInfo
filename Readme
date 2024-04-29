@@ -5,8 +5,28 @@ public class IntegrationTests
 
     public IntegrationTests()
     {
-        // Set up test server with your ASP.NET Core application startup class
-        _server = new TestServer(new WebApplicationFactory<Startup>());
+        // Set up test server with middleware and services
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddSingleton<IMyService>(new Mock<IMyService>().Object);
+        builder.Services.AddControllers();
+        builder.Services.AddMvc();
+
+        builder.Services.Configure<MvcOptions>(options =>
+        {
+            options.Filters.Add(new ApiExceptionMiddleware());
+        });
+
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen();
+
+        var app = builder.Build();
+        app.UseRouting();
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapControllers();
+        });
+
+        _server = new TestServer(new TestServerOptions { ApplicationBuilder = app });
         _client = _server.CreateClient();
     }
 
@@ -14,13 +34,8 @@ public class IntegrationTests
     public async Task MyAction_ReturnsInternalServerError_WhenServiceThrowsException()
     {
         // Arrange
-        var mockService = new Mock<IMyService>();
+        var mockService = _server.Services.GetRequiredService<IMyService>();
         mockService.Setup(s => s.SomeMethod()).Throws(new Exception("Something went wrong"));
-        // Use DI container to replace the actual service with the mock
-        _server.Host
-            .Services
-            .GetRequiredService<IMyService>()
-            .Returns(mockService.Object);
 
         // Act
         var response = await _client.GetAsync("/api/mycontroller/myaction");
