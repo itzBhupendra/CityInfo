@@ -1,3 +1,34 @@
+public class TestStartup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Configure services for testing
+        services.AddSingleton<IMyService>(new Mock<IMyService>().Object);
+        services.AddControllers();
+        services.AddMvc();
+
+        // Configure middleware for testing
+        services.Configure<MvcOptions>(options =>
+        {
+            options.Filters.Add(new ApiExceptionMiddleware());
+        });
+
+        // Configure endpoints for testing
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen();
+    }
+
+    public void Configure(IApplicationBuilder app)
+    {
+        // Configure request pipeline for testing
+        app.UseRouting();
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapControllers();
+        });
+    }
+}
+
 public class IntegrationTests
 {
     private readonly TestServer _server;
@@ -5,28 +36,8 @@ public class IntegrationTests
 
     public IntegrationTests()
     {
-        // Set up test server with middleware and services
-        var builder = WebApplication.CreateBuilder();
-        builder.Services.AddSingleton<IMyService>(new Mock<IMyService>().Object);
-        builder.Services.AddControllers();
-        builder.Services.AddMvc();
-
-        builder.Services.Configure<MvcOptions>(options =>
-        {
-            options.Filters.Add(new ApiExceptionMiddleware());
-        });
-
-        builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
-
-        var app = builder.Build();
-        app.UseRouting();
-        app.UseEndpoints(endpoints =>
-        {
-            endpoints.MapControllers();
-        });
-
-        _server = new TestServer(new TestServerOptions { ApplicationBuilder = app });
+        // Set up test server with custom TestStartup
+        _server = new TestServer(new WebApplicationFactory<TestStartup>().CreateDefaultBuilder());
         _client = _server.CreateClient();
     }
 
