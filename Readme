@@ -1,84 +1,11 @@
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-public class SensitiveDataLoggingFilter : ILoggingFilter
+namespace Microsoft.Extensions.Logging
 {
-    private readonly IEnumerable<string> sensitiveKeywords;
-
-    public SensitiveDataLoggingFilter(IEnumerable<string> sensitiveKeywords)
+    public interface ILoggingFilter
     {
-        this.sensitiveKeywords = sensitiveKeywords;
-    }
-
-    public IDisposable BeginScope<TState>(TState state)
-    {
-        return NullScope.Instance;
-    }
-
-    public bool IsEnabled(LogLevel logLevel)
-    {
-        return true;
-    }
-
-    public bool IsSensitive(string message)
-    {
-        return sensitiveKeywords.Any(keyword => message.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-    {
-        var message = formatter(state, exception);
-
-        if (IsSensitive(message))
-        {
-            // Redact sensitive data
-            message = RedactSensitiveData(message);
-        }
-
-        Console.WriteLine($"[{logLevel}] {message}");
-    }
-
-    private string RedactSensitiveData(string message)
-    {
-        // Replace sensitive keywords with asterisks
-        foreach (var keyword in sensitiveKeywords)
-        {
-            message = message.Replace(keyword, "***", StringComparison.OrdinalIgnoreCase);
-        }
-        return message;
-    }
-}
-
-public class NullScope : IDisposable
-{
-    public static NullScope Instance { get; } = new NullScope();
-
-    private NullScope() { }
-
-    public void Dispose() { }
-}
-
-class Program
-{
-    static void Main(string[] args)
-    {
-        var sensitiveKeywords = new List<string> { "password", "credit card", "ssn" }; // Example sensitive keywords
-        var loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddFilter((category, level) => level >= LogLevel.Information);
-            builder.AddProvider(new SensitiveDataLoggerProvider(sensitiveKeywords));
-        });
-
-        var logger = loggerFactory.CreateLogger<Program>();
-
-        // Log a message with sensitive data
-        logger.LogInformation("User entered password: 123456");
-
-        // Log another message without sensitive data
-        logger.LogInformation("User logged in successfully");
-
-        Console.ReadLine();
+        IDisposable BeginScope<TState>(TState state);
+        
+        bool IsEnabled(LogLevel logLevel);
+        
+        void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter);
     }
 }
