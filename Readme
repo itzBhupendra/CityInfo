@@ -1,34 +1,84 @@
-// Unit Test
-public class MyControllerTests
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public class SensitiveDataLoggingFilter : ILoggingFilter
 {
-    [Fact]
-    public async Task MyAction_Exception_HandledByMiddleware()
+    private readonly IEnumerable<string> sensitiveKeywords;
+
+    public SensitiveDataLoggingFilter(IEnumerable<string> sensitiveKeywords)
     {
-        // Arrange
-        var mockService = new Mock<IMyService>();
-        mockService.Setup(x => x.DoSomething()).Throws<Exception>();
+        this.sensitiveKeywords = sensitiveKeywords;
+    }
 
-        var serviceProvider = new ServiceCollection()
-            .AddTransient<IMyService>(_ => mockService.Object)
-            .BuildServiceProvider();
+    public IDisposable BeginScope<TState>(TState state)
+    {
+        return NullScope.Instance;
+    }
 
-        var httpContext = new DefaultHttpContext();
-        httpContext.RequestServices = serviceProvider;
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return true;
+    }
 
-        var middleware = new TestExceptionMiddleware(next: (innerHttpContext) => Task.CompletedTask);
+    public bool IsSensitive(string message)
+    {
+        return sensitiveKeywords.Any(keyword => message.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
 
-        // Create an instance of your controller and invoke the action method
-        var controller = new MyController(mockService.Object);
-        
-        // Act
-        await Assert.ThrowsAsync<Exception>(() => controller.MyAction());
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+    {
+        var message = formatter(state, exception);
 
-        // Invoke the exception middleware with the caught exception
-        await middleware.InvokeAsync(httpContext, exception: new Exception());
+        if (IsSensitive(message))
+        {
+            // Redact sensitive data
+            message = RedactSensitiveData(message);
+        }
 
-        // Assert
-        Assert.Equal(500, httpContext.Response.StatusCode);
-        var responseText = await new StreamReader(httpContext.Response.Body).ReadToEndAsync();
-        Assert.Equal("An error occurred", responseText);
+        Console.WriteLine($"[{logLevel}] {message}");
+    }
+
+    private string RedactSensitiveData(string message)
+    {
+        // Replace sensitive keywords with asterisks
+        foreach (var keyword in sensitiveKeywords)
+        {
+            message = message.Replace(keyword, "***", StringComparison.OrdinalIgnoreCase);
+        }
+        return message;
+    }
+}
+
+public class NullScope : IDisposable
+{
+    public static NullScope Instance { get; } = new NullScope();
+
+    private NullScope() { }
+
+    public void Dispose() { }
+}
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var sensitiveKeywords = new List<string> { "password", "credit card", "ssn" }; // Example sensitive keywords
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddFilter((category, level) => level >= LogLevel.Information);
+            builder.AddProvider(new SensitiveDataLoggerProvider(sensitiveKeywords));
+        });
+
+        var logger = loggerFactory.CreateLogger<Program>();
+
+        // Log a message with sensitive data
+        logger.LogInformation("User entered password: 123456");
+
+        // Log another message without sensitive data
+        logger.LogInformation("User logged in successfully");
+
+        Console.ReadLine();
     }
 }
