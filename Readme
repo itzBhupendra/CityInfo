@@ -1,11 +1,27 @@
-namespace Microsoft.Extensions.Logging
+private string RedactSensitiveData(string message)
 {
-    public interface ILoggingFilter
+    foreach (var keyword in sensitiveKeywords)
     {
-        IDisposable BeginScope<TState>(TState state);
-        
-        bool IsEnabled(LogLevel logLevel);
-        
-        void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter);
+        // Check if the message contains the keyword preceded by a known prefix
+        var prefix = keyword + "=";
+        var index = message.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+        if (index != -1)
+        {
+            // Get the substring starting from the end of the prefix
+            var startIndex = index + prefix.Length;
+            var endIndex = message.IndexOfAny(new[] { ' ', ',', ';', '.', '\n', '\r', '\t' }, startIndex);
+            if (endIndex == -1)
+            {
+                // If no delimiter found, use the entire substring
+                endIndex = message.Length;
+            }
+            var length = endIndex - startIndex;
+
+            // Replace the substring with asterisks
+            message = message.Substring(0, startIndex) +
+                      new string('*', length) +
+                      message.Substring(endIndex);
+        }
     }
+    return message;
 }
