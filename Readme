@@ -1,27 +1,7 @@
-private string RedactSensitiveData(string message)
-{
-    foreach (var keyword in sensitiveKeywords)
-    {
-        // Check if the message contains the keyword preceded by a known prefix
-        var prefix = keyword + "=";
-        var index = message.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
-        if (index != -1)
-        {
-            // Get the substring starting from the end of the prefix
-            var startIndex = index + prefix.Length;
-            var endIndex = message.IndexOfAny(new[] { ' ', ',', ';', '.', '\n', '\r', '\t' }, startIndex);
-            if (endIndex == -1)
-            {
-                // If no delimiter found, use the entire substring
-                endIndex = message.Length;
-            }
-            var length = endIndex - startIndex;
-
-            // Replace the substring with asterisks
-            message = message.Substring(0, startIndex) +
-                      new string('*', length) +
-                      message.Substring(endIndex);
-        }
-    }
-    return message;
-}
+var customerData = data.GroupBy(ca => ca.CustomerId)
+                                   .Select(group => new CustomerWithAddress
+                                   {
+                                       Customer = new Customer { Id = group.Key, Name = group.First().CustomerName },
+                                       Address = new Address { Id = group.First().AddressId, CustomerId = group.Key, Street = group.First().Street }
+                                   })
+                                   .ToList();
