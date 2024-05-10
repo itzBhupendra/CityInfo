@@ -1,7 +1,47 @@
-var customerData = data.GroupBy(ca => ca.CustomerId)
-                                   .Select(group => new CustomerWithAddress
-                                   {
-                                       Customer = new Customer { Id = group.Key, Name = group.First().CustomerName },
-                                       Address = new Address { Id = group.First().AddressId, CustomerId = group.Key, Street = group.First().Street }
-                                   })
-                                   .ToList();
+using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+
+public class GenericTcpClient<TParameter, TResult>
+{
+    private readonly string _serverAddress;
+    private readonly int _port;
+
+    public GenericTcpClient(string serverAddress, int port)
+    {
+        _serverAddress = serverAddress;
+        _port = port;
+    }
+
+    public async Task<TResult> CallServiceAsync(TParameter parameter)
+    {
+        try
+        {
+            using (TcpClient client = new TcpClient(_serverAddress, _port))
+            using (NetworkStream stream = client.GetStream())
+            using (StreamReader reader = new StreamReader(stream))
+            using (StreamWriter writer = new StreamWriter(stream))
+            {
+                // Convert the parameter to a string representation
+                string parameterString = parameter.ToString();
+
+                // Send the parameter to the server
+                await writer.WriteLineAsync(parameterString);
+                await writer.FlushAsync();
+
+                // Read the response from the server
+                string response = await reader.ReadLineAsync();
+
+                // Convert the response to the TResult type
+                return (TResult)Convert.ChangeType(response, typeof(TResult));
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle exceptions here
+            Console.WriteLine("Error: " + ex.Message);
+            throw;
+        }
+    }
+}
