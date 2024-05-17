@@ -1,47 +1,66 @@
 using System;
-using System.IO;
-using System.Net.Sockets;
+using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
-public class GenericTcpClient<TParameter, TResult>
+public class ClientCalls
 {
-    private readonly string _serverAddress;
-    private readonly int _port;
+    private readonly HttpClient _httpClient;
 
-    public GenericTcpClient(string serverAddress, int port)
+    public ClientCalls()
     {
-        _serverAddress = serverAddress;
-        _port = port;
+        _httpClient = new HttpClient();
     }
 
-    public async Task<TResult> CallServiceAsync(TParameter parameter)
+    public async Task<T> HttpGetAsync<T>(string url)
     {
         try
         {
-            using (TcpClient client = new TcpClient(_serverAddress, _port))
-            using (NetworkStream stream = client.GetStream())
-            using (StreamReader reader = new StreamReader(stream))
-            using (StreamWriter writer = new StreamWriter(stream))
-            {
-                // Convert the parameter to a string representation
-                string parameterString = parameter.ToString();
-
-                // Send the parameter to the server
-                await writer.WriteLineAsync(parameterString);
-                await writer.FlushAsync();
-
-                // Read the response from the server
-                string response = await reader.ReadLineAsync();
-
-                // Convert the response to the TResult type
-                return (TResult)Convert.ChangeType(response, typeof(TResult));
-            }
+            HttpResponseMessage response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            string responseData = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<T>(responseData);
         }
-        catch (Exception ex)
+        catch (HttpRequestException e)
         {
-            // Handle exceptions here
-            Console.WriteLine("Error: " + ex.Message);
-            throw;
+            // Handle exception
+            throw new Exception("HTTP GET request failed", e);
+        }
+    }
+
+    public async Task<TResponse> HttpPostAsync<TRequest, TResponse>(string url, TRequest data)
+    {
+        try
+        {
+            string jsonData = JsonConvert.SerializeObject(data);
+            StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
+            response.EnsureSuccessStatusCode();
+            string responseData = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<TResponse>(responseData);
+        }
+        catch (HttpRequestException e)
+        {
+            // Handle exception
+            throw new Exception("HTTP POST request failed", e);
+        }
+    }
+
+    public async Task<string> HttpPostAsync<TRequest>(string url, TRequest data)
+    {
+        try
+        {
+            string jsonData = JsonConvert.SerializeObject(data);
+            StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException e)
+        {
+            // Handle exception
+            throw new Exception("HTTP POST request failed", e);
         }
     }
 }
