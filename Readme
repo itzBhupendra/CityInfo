@@ -1,66 +1,21 @@
-using System;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
-
-public class ClientCalls
-{
-    private readonly HttpClient _httpClient;
-
-    public ClientCalls()
+ public async Task Get_WhenExceptionThrown_ReturnsInternalServerError()
     {
-        _httpClient = new HttpClient();
-    }
+        // Arrange
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<ExceptionHandlingMiddleware>()
+            .BuildServiceProvider();
 
-    public async Task<T> HttpGetAsync<T>(string url)
-    {
-        try
-        {
-            HttpResponseMessage response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            string responseData = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<T>(responseData);
-        }
-        catch (HttpRequestException e)
-        {
-            // Handle exception
-            throw new Exception("HTTP GET request failed", e);
-        }
-    }
+        var middleware = serviceProvider.GetService<ExceptionHandlingMiddleware>();
 
-    public async Task<TResponse> HttpPostAsync<TRequest, TResponse>(string url, TRequest data)
-    {
-        try
-        {
-            string jsonData = JsonConvert.SerializeObject(data);
-            StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
-            response.EnsureSuccessStatusCode();
-            string responseData = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<TResponse>(responseData);
-        }
-        catch (HttpRequestException e)
-        {
-            // Handle exception
-            throw new Exception("HTTP POST request failed", e);
-        }
-    }
+        var context = new DefaultHttpContext();
+        context.RequestServices = serviceProvider;
 
-    public async Task<string> HttpPostAsync<TRequest>(string url, TRequest data)
-    {
-        try
-        {
-            string jsonData = JsonConvert.SerializeObject(data);
-            StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
-        }
-        catch (HttpRequestException e)
-        {
-            // Handle exception
-            throw new Exception("HTTP POST request failed", e);
-        }
+        _mockService.Setup(service => service.GetById(It.IsAny<int>())).Throws(new Exception("Test exception"));
+
+        // Act
+        var result = await middleware.InvokeAsync(context);
+
+        // Assert
+        var statusCodeResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, statusCodeResult.StatusCode);
     }
-}
