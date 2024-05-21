@@ -1,21 +1,62 @@
- public async Task Get_WhenExceptionThrown_ReturnsInternalServerError()
-    {
-        // Arrange
-        var serviceProvider = new ServiceCollection()
-            .AddSingleton<ExceptionHandlingMiddleware>()
-            .BuildServiceProvider();
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Moq;
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
 
-        var middleware = serviceProvider.GetService<ExceptionHandlingMiddleware>();
+public class MyControllerTests
+{
+    private readonly TestServer _server;
+    private readonly HttpClient _client;
+    private readonly Mock<IMyService> _mockService;
+    private readonly Mock<IHttpContextAccessor> _mockHttpContextAccessor;
+
+    public MyControllerTests()
+    {
+        _mockService = new Mock<IMyService>();
+        _mockHttpContextAccessor = new Mock<IHttpContextAccessor>();
 
         var context = new DefaultHttpContext();
-        context.RequestServices = serviceProvider;
+        _mockHttpContextAccessor.Setup(_ => _.HttpContext).Returns(context);
 
+        var builder = new WebHostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(_mockService.Object);
+                services.AddSingleton(_mockHttpContextAccessor.Object);
+                services.AddControllers();
+                services.AddLogging();
+            })
+            .Configure(app =>
+            {
+                app.UseMiddleware<LoggingMiddleware>();
+                app.UseMiddleware<ExceptionHandlingMiddleware>();
+                app.UseRouting();
+                app.UseEndpoints(endpoints =>
+                {
+                    endpoints.MapControllers();
+                });
+            });
+
+        _server = new TestServer(builder);
+        _client = _server.CreateClient();
+    }
+
+    [Fact]
+    public async Task Get_WhenExceptionThrown_ReturnsInternalServerError()
+    {
+        // Arrange
         _mockService.Setup(service => service.GetById(It.IsAny<int>())).Throws(new Exception("Test exception"));
 
         // Act
-        var result = await middleware.InvokeAsync(context);
+        var response = await _client.GetAsync("/mycontroller/1");
 
         // Assert
-        var statusCodeResult = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status500InternalServerError, statusCodeResult.StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, response.StatusCode);
     }
+}
