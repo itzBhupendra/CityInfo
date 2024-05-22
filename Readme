@@ -1,62 +1,79 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Moq;
 using System;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
-using Xunit;
+using Newtonsoft.Json;
 
-public class MyControllerTests
+public class ClientCalls
 {
-    private readonly TestServer _server;
-    private readonly HttpClient _client;
-    private readonly Mock<IMyService> _mockService;
-    private readonly Mock<IHttpContextAccessor> _mockHttpContextAccessor;
+    private readonly HttpClient _httpClient;
 
-    public MyControllerTests()
+    public ClientCalls()
     {
-        _mockService = new Mock<IMyService>();
-        _mockHttpContextAccessor = new Mock<IHttpContextAccessor>();
-
-        var context = new DefaultHttpContext();
-        _mockHttpContextAccessor.Setup(_ => _.HttpContext).Returns(context);
-
-        var builder = new WebHostBuilder()
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton(_mockService.Object);
-                services.AddSingleton(_mockHttpContextAccessor.Object);
-                services.AddControllers();
-                services.AddLogging();
-            })
-            .Configure(app =>
-            {
-                app.UseMiddleware<LoggingMiddleware>();
-                app.UseMiddleware<ExceptionHandlingMiddleware>();
-                app.UseRouting();
-                app.UseEndpoints(endpoints =>
-                {
-                    endpoints.MapControllers();
-                });
-            });
-
-        _server = new TestServer(builder);
-        _client = _server.CreateClient();
+        _httpClient = new HttpClient();
     }
 
-    [Fact]
-    public async Task Get_WhenExceptionThrown_ReturnsInternalServerError()
+    public async Task<ApiResponse<T>> HttpGetAsync<T>(string url)
     {
-        // Arrange
-        _mockService.Setup(service => service.GetById(It.IsAny<int>())).Throws(new Exception("Test exception"));
+        try
+        {
+            HttpResponseMessage response = await _httpClient.GetAsync(url);
+            string responseData = await response.Content.ReadAsStringAsync();
 
-        // Act
-        var response = await _client.GetAsync("/mycontroller/1");
+            if (response.IsSuccessStatusCode)
+            {
+                T data = JsonConvert.DeserializeObject<T>(responseData);
+                return new ApiResponse<T>(data, response.StatusCode);
+            }
+            else
+            {
+                return new ApiResponse<T>(default, response.StatusCode, responseData);
+            }
+        }
+        catch (HttpRequestException e)
+        {
+            throw new Exception("HTTP GET request failed", e);
+        }
+    }
 
-        // Assert
-        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, response.StatusCode);
+    public async Task<ApiResponse<TResponse>> HttpPostAsync<TRequest, TResponse>(string url, TRequest data)
+    {
+        try
+        {
+            string jsonData = JsonConvert.SerializeObject(data);
+            StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
+            string responseData = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                TResponse result = JsonConvert.DeserializeObject<TResponse>(responseData);
+                return new ApiResponse<TResponse>(result, response.StatusCode);
+            }
+            else
+            {
+                return new ApiResponse<TResponse>(default, response.StatusCode, responseData);
+            }
+        }
+        catch (HttpRequestException e)
+        {
+            throw new Exception("HTTP POST request failed", e);
+        }
+    }
+}
+
+public class ApiResponse<T>
+{
+    public T Data { get; set; }
+    public bool IsSuccess { get; set; }
+    public string Error { get; set; }
+    public System.Net.HttpStatusCode StatusCode { get; set; }
+
+    public ApiResponse(T data, System.Net.HttpStatusCode statusCode, string error = null)
+    {
+        Data = data;
+        StatusCode = statusCode;
+        IsSuccess = statusCode == System.Net.HttpStatusCode.OK;
+        Error = error;
     }
 }
