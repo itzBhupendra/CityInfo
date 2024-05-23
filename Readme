@@ -1,79 +1,85 @@
-using System;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
-public class ClientCalls
+namespace YourNamespace.Tests
 {
-    private readonly HttpClient _httpClient;
-
-    public ClientCalls()
+    [TestClass]
+    public class MyControllerTests
     {
-        _httpClient = new HttpClient();
-    }
+        private static WebApplicationFactory<Program> _factory;
+        private static HttpClient _client;
 
-    public async Task<ApiResponse<T>> HttpGetAsync<T>(string url)
-    {
-        try
+        [ClassInitialize]
+        public static void ClassInitialize(TestContext context)
         {
-            HttpResponseMessage response = await _httpClient.GetAsync(url);
-            string responseData = await response.Content.ReadAsStringAsync();
+            _factory = new WebApplicationFactory<Program>()
+                .WithWebHostBuilder(builder =>
+                {
+                    builder.ConfigureServices(services =>
+                    {
+                        // Register controllers and other services for testing
+                        services.AddControllers();
+                        services.AddSingleton<IMyService, MyService>();
+                        services.AddHttpContextAccessor();
+                    });
 
-            if (response.IsSuccessStatusCode)
+                    builder.Configure(app =>
+                    {
+                        app.UseMiddleware<ExceptionMiddleware>(); // Ensure the Exception Middleware is added
+
+                        app.UseRouting();
+                        app.UseAuthorization();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapControllers();
+                        });
+                    });
+                });
+
+            _client = _factory.CreateClient(new WebApplicationFactoryClientOptions
             {
-                T data = JsonConvert.DeserializeObject<T>(responseData);
-                return new ApiResponse<T>(data, response.StatusCode);
-            }
-            else
-            {
-                return new ApiResponse<T>(default, response.StatusCode, responseData);
-            }
+                BaseAddress = new Uri("http://localhost")
+            });
         }
-        catch (HttpRequestException e)
+
+        [ClassCleanup]
+        public static void ClassCleanup()
         {
-            throw new Exception("HTTP GET request failed", e);
+            _client.Dispose();
+            _factory.Dispose();
         }
-    }
 
-    public async Task<ApiResponse<TResponse>> HttpPostAsync<TRequest, TResponse>(string url, TRequest data)
-    {
-        try
+        [TestMethod]
+        public async Task Get_WhenExceptionThrown_ReturnsInternalServerError()
         {
-            string jsonData = JsonConvert.SerializeObject(data);
-            StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
-            string responseData = await response.Content.ReadAsStringAsync();
+            // Act
+            var response = await _client.GetAsync("/MyController/1"); // Ensure the path is correct
 
-            if (response.IsSuccessStatusCode)
-            {
-                TResponse result = JsonConvert.DeserializeObject<TResponse>(responseData);
-                return new ApiResponse<TResponse>(result, response.StatusCode);
-            }
-            else
-            {
-                return new ApiResponse<TResponse>(default, response.StatusCode, responseData);
-            }
+            // Assert
+            Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
+
+            var content = await response.Content.ReadAsStringAsync();
+            Assert.IsTrue(content.Contains("Internal Server Error from the custom middleware."));
         }
-        catch (HttpRequestException e)
+
+        [TestMethod]
+        public void VerifyControllerRegistration()
         {
-            throw new Exception("HTTP POST request failed", e);
+            // Arrange
+            var endpointDataSource = _factory.Services.GetRequiredService<EndpointDataSource>();
+
+            // Act
+            var controllerEndpoints = endpointDataSource.Endpoints
+                .Where(e => e.Metadata.GetMetadata<ControllerActionDescriptor>() != null)
+                .ToList();
+
+            // Assert
+            Assert.IsTrue(controllerEndpoints.Count > 0);
         }
-    }
-}
-
-public class ApiResponse<T>
-{
-    public T Data { get; set; }
-    public bool IsSuccess { get; set; }
-    public string Error { get; set; }
-    public System.Net.HttpStatusCode StatusCode { get; set; }
-
-    public ApiResponse(T data, System.Net.HttpStatusCode statusCode, string error = null)
-    {
-        Data = data;
-        StatusCode = statusCode;
-        IsSuccess = statusCode == System.Net.HttpStatusCode.OK;
-        Error = error;
     }
 }
