@@ -1,17 +1,21 @@
 using Microsoft.Extensions.Logging;
 using System;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 
 public static class LoggerExtensions
 {
-    public static IDisposable LogMethod(this ILogger logger,
+    public static ILogMethodScope LogMethod(this ILogger logger,
         [CallerMemberName] string methodName = "")
     {
         return new LogMethodScope(logger, methodName);
     }
 
-    private class LogMethodScope : IDisposable
+    public interface ILogMethodScope : IDisposable
+    {
+        void LogException(Exception ex);
+    }
+
+    private class LogMethodScope : ILogMethodScope
     {
         private readonly ILogger _logger;
         private readonly string _methodName;
