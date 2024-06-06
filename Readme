@@ -1,85 +1,41 @@
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Net;
-using System.Net.Http;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
-namespace YourNamespace.Tests
+public static class LoggerExtensions
 {
-    [TestClass]
-    public class MyControllerTests
+    public static IDisposable LogMethod(this ILogger logger,
+        [CallerMemberName] string methodName = "")
     {
-        private static WebApplicationFactory<Program> _factory;
-        private static HttpClient _client;
+        return new LogMethodScope(logger, methodName);
+    }
 
-        [ClassInitialize]
-        public static void ClassInitialize(TestContext context)
+    private class LogMethodScope : IDisposable
+    {
+        private readonly ILogger _logger;
+        private readonly string _methodName;
+        private bool _disposed = false;
+
+        public LogMethodScope(ILogger logger, string methodName)
         {
-            _factory = new WebApplicationFactory<Program>()
-                .WithWebHostBuilder(builder =>
-                {
-                    builder.ConfigureServices(services =>
-                    {
-                        // Register controllers and other services for testing
-                        services.AddControllers();
-                        services.AddSingleton<IMyService, MyService>();
-                        services.AddHttpContextAccessor();
-                    });
+            _logger = logger;
+            _methodName = methodName;
+            _logger.LogInformation($"Starting function {_methodName} at {DateTime.UtcNow}");
+        }
 
-                    builder.Configure(app =>
-                    {
-                        app.UseMiddleware<ExceptionMiddleware>(); // Ensure the Exception Middleware is added
-
-                        app.UseRouting();
-                        app.UseAuthorization();
-                        app.UseEndpoints(endpoints =>
-                        {
-                            endpoints.MapControllers();
-                        });
-                    });
-                });
-
-            _client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        public void Dispose()
+        {
+            if (!_disposed)
             {
-                BaseAddress = new Uri("http://localhost")
-            });
+                _disposed = true;
+                _logger.LogInformation($"Ending function {_methodName} at {DateTime.UtcNow}");
+            }
         }
 
-        [ClassCleanup]
-        public static void ClassCleanup()
+        public void LogException(Exception ex)
         {
-            _client.Dispose();
-            _factory.Dispose();
-        }
-
-        [TestMethod]
-        public async Task Get_WhenExceptionThrown_ReturnsInternalServerError()
-        {
-            // Act
-            var response = await _client.GetAsync("/MyController/1"); // Ensure the path is correct
-
-            // Assert
-            Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
-
-            var content = await response.Content.ReadAsStringAsync();
-            Assert.IsTrue(content.Contains("Internal Server Error from the custom middleware."));
-        }
-
-        [TestMethod]
-        public void VerifyControllerRegistration()
-        {
-            // Arrange
-            var endpointDataSource = _factory.Services.GetRequiredService<EndpointDataSource>();
-
-            // Act
-            var controllerEndpoints = endpointDataSource.Endpoints
-                .Where(e => e.Metadata.GetMetadata<ControllerActionDescriptor>() != null)
-                .ToList();
-
-            // Assert
-            Assert.IsTrue(controllerEndpoints.Count > 0);
+            _logger.LogError(ex, $"Exception in function {_methodName} at {DateTime.UtcNow}");
         }
     }
 }
