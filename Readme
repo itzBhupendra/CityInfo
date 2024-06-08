@@ -1,45 +1,73 @@
 using Microsoft.Extensions.Logging;
 using System;
-using System.Runtime.CompilerServices;
+using System.IO;
 
-public static class LoggerExtensions
+public class ServiceLoggerProvider : ILoggerProvider
 {
-    public static ILogMethodScope LogMethod(this ILogger logger,
-        [CallerMemberName] string methodName = "")
+    private readonly LogLevel _logLevel;
+
+    public ServiceLoggerProvider(LogLevel logLevel)
     {
-        return new LogMethodScope(logger, methodName);
+        _logLevel = logLevel;
     }
 
-    public interface ILogMethodScope : IDisposable
+    public ILogger CreateLogger(string categoryName)
     {
-        void LogException(Exception ex);
+        string logFilePath = $"logs/log_{categoryName}_{Guid.NewGuid()}.txt"; // Generate a unique log file path
+        return new ServiceLogger(logFilePath, _logLevel);
     }
 
-    private class LogMethodScope : ILogMethodScope
+    public void Dispose() { }
+}
+
+public class ServiceLogger : ILogger
+{
+    private readonly string _logFilePath;
+    private readonly LogLevel _logLevel;
+    private readonly object _lock = new object();
+
+    public ServiceLogger(string logFilePath, LogLevel logLevel)
     {
-        private readonly ILogger _logger;
-        private readonly string _methodName;
-        private bool _disposed = false;
+        _logFilePath = logFilePath;
+        _logLevel = logLevel;
+    }
 
-        public LogMethodScope(ILogger logger, string methodName)
-        {
-            _logger = logger;
-            _methodName = methodName;
-            _logger.LogInformation($"Starting function {_methodName} at {DateTime.UtcNow}");
-        }
+    public IDisposable BeginScope<TState>(TState state) => null;
 
-        public void Dispose()
-        {
-            if (!_disposed)
-            {
-                _disposed = true;
-                _logger.LogInformation($"Ending function {_methodName} at {DateTime.UtcNow}");
-            }
-        }
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= _logLevel;
 
-        public void LogException(Exception ex)
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+    {
+        if (!IsEnabled(logLevel))
+            return;
+
+        var logEntry = new LogEntry
         {
-            _logger.LogError(ex, $"Exception in function {_methodName} at {DateTime.UtcNow}");
+            Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            LogLevel = logLevel.ToString(),
+            Message = formatter(state, exception),
+            Exception = exception?.ToString()
+        };
+
+        var logMessage = FormatLogMessage(logEntry);
+
+        lock (_lock)
+        {
+            File.AppendAllText(_logFilePath, logMessage);
         }
+    }
+
+    private string FormatLogMessage(LogEntry logEntry)
+    {
+        return $"[{logEntry.Timestamp}] [{logEntry.LogLevel}]: {logEntry.Message}{Environment.NewLine}" +
+               (logEntry.Exception != null ? $"Exception: {logEntry.Exception}{Environment.NewLine}" : "");
+    }
+
+    private class LogEntry
+    {
+        public string Timestamp { get; set; }
+        public string LogLevel { get; set; }
+        public string Message { get; set; }
+        public string Exception { get; set; }
     }
 }
