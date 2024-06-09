@@ -64,4 +64,28 @@ const LogTable: React.FC = () => {
               <TableCell key={headCell.id}>
                 <TableSortLabel
                   active={orderBy === headCell.id}
-                  direction={orderBy === 
+                  direction={orderBy === headCell.id ? order : 'asc'}
+                  onClick={() => handleRequestSort(headCell.id)}
+                >
+                  {headCell.label}
+                </TableSortLabel>
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sortedLogs.map((log, index) => (
+            <TableRow key={index}>
+              <TableCell>{log.dateTime}</TableCell>
+              <TableCell>{log.logLevel}</TableCell>
+              <TableCell>{log.correlationId}</TableCell>
+              <TableCell>{log.message}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+};
+
+export default LogTable;
