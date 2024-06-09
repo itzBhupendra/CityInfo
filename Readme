@@ -1,33 +1,13 @@
-// src/App.tsx
-import React, { useEffect } from 'react';
-import { Container, Typography } from '@mui/material';
-import { useDispatch } from 'react-redux';
-import { fetchLogs } from './slices/logsSlice';
-import SearchComponent from './components/SearchComponent';
-import FilterComponent from './components/FilterComponent';
-import LogTable from './components/LogTable';
-import { AppDispatch } from './store/store'; // Import AppDispatch
-import './App.css';
+import { configureStore } from '@reduxjs/toolkit';
+import logsReducer from '../slices/logsSlice';
 
-const App: React.FC = () => {
-  const dispatch: AppDispatch = useDispatch(); // Type the dispatch function
+const store = configureStore({
+  reducer: {
+    logs: logsReducer,
+  },
+});
 
-  useEffect(() => {
-    dispatch(fetchLogs());
-  }, [dispatch]);
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
 
-  return (
-    <Container>
-      <Typography variant="h4" gutterBottom>
-        Error Logs Dashboard
-      </Typography>
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-        <SearchComponent />
-        <FilterComponent />
-      </div>
-      <LogTable />
-    </Container>
-  );
-};
-
-export default App;
+export default store;
