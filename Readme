@@ -1,65 +1,32 @@
-// src/slices/logsSlice.ts
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import axios from 'axios';
+// src/App.tsx
+import React, { useEffect } from 'react';
+import { Container, Typography } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import { fetchLogs } from './slices/logsSlice';
+import SearchComponent from './components/SearchComponent';
+import FilterComponent from './components/FilterComponent';
+import LogTable from './components/LogTable';
+import './App.css';
 
-interface LogEntry {
-  monitor: string;
-  status: string;
-  location: string;
-  date: string;
-}
+const App: React.FC = () => {
+  const dispatch = useDispatch();
 
-interface LogsState {
-  logs: LogEntry[];
-  filteredLogs: LogEntry[];
-  loading: boolean;
-  error: string | null;
-}
+  useEffect(() => {
+    dispatch(fetchLogs());
+  }, [dispatch]);
 
-const initialState: LogsState = {
-  logs: [],
-  filteredLogs: [],
-  loading: false,
-  error: null,
+  return (
+    <Container>
+      <Typography variant="h4" gutterBottom>
+        Error Logs Dashboard
+      </Typography>
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+        <SearchComponent />
+        <FilterComponent />
+      </div>
+      <LogTable />
+    </Container>
+  );
 };
 
-export const fetchLogs = createAsyncThunk('logs/fetchLogs', async () => {
-  const response = await axios.get('http://localhost:5000/api/logs');
-  return response.data;
-});
-
-const logsSlice = createSlice({
-  name: 'logs',
-  initialState,
-  reducers: {
-    filterLogs: (state, action: PayloadAction<string>) => {
-      const query = action.payload.toLowerCase();
-      state.filteredLogs = state.logs.filter(
-        (log) =>
-          log.monitor.toLowerCase().includes(query) ||
-          log.status.toLowerCase().includes(query) ||
-          log.location.toLowerCase().includes(query)
-      );
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchLogs.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchLogs.fulfilled, (state, action: PayloadAction<LogEntry[]>) => {
-        state.logs = action.payload;
-        state.filteredLogs = action.payload;
-        state.loading = false;
-      })
-      .addCase(fetchLogs.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message || 'Something went wrong';
-      });
-  },
-});
-
-export const { filterLogs } = logsSlice.actions;
-
-export default logsSlice.reducer;
+export default App;
