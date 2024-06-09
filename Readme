@@ -1,14 +1,33 @@
-// src/index.tsx
-import React from 'react';
-import ReactDOM from 'react-dom';
-import { Provider } from 'react-redux';
-import store from './store/store';
-import App from './App';
-import './index.css';
+// src/App.tsx
+import React, { useEffect } from 'react';
+import { Container, Typography } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import { fetchLogs } from './slices/logsSlice';
+import SearchComponent from './components/SearchComponent';
+import FilterComponent from './components/FilterComponent';
+import LogTable from './components/LogTable';
+import { AppDispatch } from './store/store'; // Import AppDispatch
+import './App.css';
 
-ReactDOM.render(
-  <Provider store={store}>
-    <App />
-  </Provider>,
-  document.getElementById('root')
-);
+const App: React.FC = () => {
+  const dispatch: AppDispatch = useDispatch(); // Type the dispatch function
+
+  useEffect(() => {
+    dispatch(fetchLogs());
+  }, [dispatch]);
+
+  return (
+    <Container>
+      <Typography variant="h4" gutterBottom>
+        Error Logs Dashboard
+      </Typography>
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+        <SearchComponent />
+        <FilterComponent />
+      </div>
+      <LogTable />
+    </Container>
+  );
+};
+
+export default App;
