@@ -1,22 +1,49 @@
-public class LogEntry
-    {
-        public DateTime DateTime { get; set; }
-        public string LogLevel { get; set; }
-        public string CorrelationId { get; set; }
-        public string Message { get; set; }
-    }
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchLogs } from './slices/logsSlice';
+import { RootState, AppDispatch } from './store/store';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
 
+const LogTable: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>(); // Type the dispatch function
+  const logs = useSelector((state: RootState) => state.logs.logs);
+  const loading = useSelector((state: RootState) => state.logs.loading);
+  const error = useSelector((state: RootState) => state.logs.error);
 
+  useEffect(() => {
+    dispatch(fetchLogs());
+  }, [dispatch]);
 
- var logs = new List<LogEntry>
-            {
-                new LogEntry { DateTime = DateTime.Now.AddMinutes(-10), LogLevel = "Warning", CorrelationId = "123", Message = "Unable to resolve host" },
-                new LogEntry { DateTime = DateTime.Now.AddMinutes(-20), LogLevel = "Error", CorrelationId = "456", Message = "TCP connection failed" },
-                new LogEntry { DateTime = DateTime.Now.AddMinutes(-30), LogLevel = "Error", CorrelationId = "789", Message = "soapUI-specific Error" },
-                new LogEntry { DateTime = DateTime.Now.AddMinutes(-40), LogLevel = "Error", CorrelationId = "101", Message = "HTTP Error" },
-                new LogEntry { DateTime = DateTime.Now.AddMinutes(-50), LogLevel = "Error", CorrelationId = "112", Message = "Service Execution Error" }
-            };
+  return (
+    <TableContainer component={Paper}>
+      <h1>Log Dashboard</h1>
+      {loading && <p>Loading...</p>}
+      {error && <p>Error: {error}</p>}
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Date Time</TableCell>
+            <TableCell>Log Level</TableCell>
+            <TableCell>Correlation ID</TableCell>
+            <TableCell>Message</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {logs.map((log, index) => (
+            <TableRow key={index}>
+              <TableCell>{log.dateTime}</TableCell>
+              <TableCell>{log.logLevel}</TableCell>
+              <TableCell>{log.correlationId}</TableCell>
+              <TableCell>{log.message}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+};
 
+export default LogTable;
 
 
 
@@ -88,39 +115,3 @@ export const { filterLogs } = logsSlice.actions;
 export default logsSlice.reducer;
 
 
-
-
-
-
-vimport React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchLogs } from './slices/logsSlice';
-import { RootState, AppDispatch } from './store/store'; // Import AppDispatch and RootState
-
-const LogDashboard: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>(); // Type the dispatch function
-  const logs = useSelector((state: RootState) => state.logs.logs);
-  const loading = useSelector((state: RootState) => state.logs.loading);
-  const error = useSelector((state: RootState) => state.logs.error);
-
-  useEffect(() => {
-    dispatch(fetchLogs());
-  }, [dispatch]);
-
-  return (
-    <div>
-      <h1>Log Dashboard</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p>Error: {error}</p>}
-      <ul>
-        {logs.map((log, index) => (
-          <li key={index}>
-            {log.dateTime} - {log.logLevel} - {log.correlationId} - {log.message}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
-
-export default LogDashboard;
