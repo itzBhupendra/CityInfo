@@ -1,13 +1,34 @@
-import { configureStore } from '@reduxjs/toolkit';
-import logsReducer from '../slices/logsSlice';
+using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
 
-const store = configureStore({
-  reducer: {
-    logs: logsReducer,
-  },
-});
+namespace LogDashboardApi.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class LogsController : ControllerBase
+    {
+        [HttpGet]
+        public IActionResult GetLogs()
+        {
+            var logs = new List<LogEntry>
+            {
+                new LogEntry { Monitor = "LuciernaBank Up/Down", Status = "51 - Warning", Location = "Chicago, Illinois", Date = DateTime.Now.AddMinutes(-10).ToString() },
+                new LogEntry { Monitor = "LuciernaBank Up/Down", Status = "1 - Error", Location = "Frankfurt, Germany", Date = DateTime.Now.AddMinutes(-20).ToString() },
+                new LogEntry { Monitor = "WeatherToday", Status = "6060 - soapUI-specific Error", Location = "London, UK", Date = DateTime.Now.AddMinutes(-30).ToString() },
+                new LogEntry { Monitor = "QA API", Status = "7 - HTTP Error", Location = "Fort Lauderdale, FL", Date = DateTime.Now.AddMinutes(-40).ToString() },
+                new LogEntry { Monitor = "Mobile website", Status = "5300 - Service Execution Error", Location = "iPhone-Boston", Date = DateTime.Now.AddMinutes(-50).ToString() }
+            };
 
-export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;
+            return Ok(logs);
+        }
+    }
 
-export default store;
+    public class LogEntry
+    {
+        public string Monitor { get; set; }
+        public string Status { get; set; }
+        public string Location { get; set; }
+        public string Date { get; set; }
+    }
+}
