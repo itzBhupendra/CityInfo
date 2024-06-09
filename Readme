@@ -1,34 +1,84 @@
-using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Generic;
+// src/axiosInstance.ts
+import axios from 'axios';
 
-namespace LogDashboardApi.Controllers
-{
-    [ApiController]
-    [Route("api/[controller]")]
-    public class LogsController : ControllerBase
-    {
-        [HttpGet]
-        public IActionResult GetLogs()
-        {
-            var logs = new List<LogEntry>
-            {
-                new LogEntry { Monitor = "LuciernaBank Up/Down", Status = "51 - Warning", Location = "Chicago, Illinois", Date = DateTime.Now.AddMinutes(-10).ToString() },
-                new LogEntry { Monitor = "LuciernaBank Up/Down", Status = "1 - Error", Location = "Frankfurt, Germany", Date = DateTime.Now.AddMinutes(-20).ToString() },
-                new LogEntry { Monitor = "WeatherToday", Status = "6060 - soapUI-specific Error", Location = "London, UK", Date = DateTime.Now.AddMinutes(-30).ToString() },
-                new LogEntry { Monitor = "QA API", Status = "7 - HTTP Error", Location = "Fort Lauderdale, FL", Date = DateTime.Now.AddMinutes(-40).ToString() },
-                new LogEntry { Monitor = "Mobile website", Status = "5300 - Service Execution Error", Location = "iPhone-Boston", Date = DateTime.Now.AddMinutes(-50).ToString() }
-            };
+const userId = 'your-user-id'; // Replace with the actual user ID
 
-            return Ok(logs);
-        }
-    }
+const axiosInstance = axios.create({
+  baseURL: 'http://localhost:5000/api',
+  headers: {
+    'User-ID': userId
+  }
+});
 
-    public class LogEntry
-    {
-        public string Monitor { get; set; }
-        public string Status { get; set; }
-        public string Location { get; set; }
-        public string Date { get; set; }
-    }
+
+export default axiosInstance;
+
+
+
+
+
+// src/slices/logsSlice.ts
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import axiosInstance from '../axiosInstance';
+
+interface LogEntry {
+  monitor: string;
+  status: string;
+  location: string;
+  date: string;
 }
+
+interface LogsState {
+  logs: LogEntry[];
+  filteredLogs: LogEntry[];
+  loading: boolean;
+  error: string | null;
+}
+
+const initialState: LogsState = {
+  logs: [],
+  filteredLogs: [],
+  loading: false,
+  error: null,
+};
+
+export const fetchLogs = createAsyncThunk('logs/fetchLogs', async () => {
+  const response = await axiosInstance.get('/logs');
+  return response.data;
+});
+
+const logsSlice = createSlice({
+  name: 'logs',
+  initialState,
+  reducers: {
+    filterLogs: (state, action: PayloadAction<string>) => {
+      const query = action.payload.toLowerCase();
+      state.filteredLogs = state.logs.filter(
+        (log) =>
+          log.monitor.toLowerCase().includes(query) ||
+          log.status.toLowerCase().includes(query) ||
+          log.location.toLowerCase().includes(query)
+      );
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchLogs.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchLogs.fulfilled, (state, action: PayloadAction<LogEntry[]>) => {
+        state.logs = action.payload;
+        state.filteredLogs = action.payload;
+        state.loading = false;
+      })
+      .addCase(fetchLogs.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Something went wrong';
+      });
+  },
+});
+
+export const { filterLogs } = logsSlice.actions;
+
+export default logsSlice.reducer;
