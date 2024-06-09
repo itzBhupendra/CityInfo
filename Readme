@@ -1,38 +1,276 @@
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
+npm create vite@latest log-dashboard --template react-ts
+cd log-dashboard
+npm install
 
-public static class LoggerExtensions
-{
-    public static void LogFilteredJson(this ILogger logger, string jsonString, EventId eventId)
-    {
-        var json = JObject.Parse(jsonString);
-        RemoveSensitiveData(json, SensitiveDataKeys.Keys);
-        logger.LogInformation(eventId, json.ToString());
-    }
+npm install @mui/material @emotion/react @emotion/styled @mui/icons-material @reduxjs/toolkit react-redux axios
 
-    private static void RemoveSensitiveData(JObject json, HashSet<string> sensitiveKeys)
-    {
-        var propertiesToMask = new List<JProperty>();
 
-        // Collect properties to mask to avoid modifying the collection while iterating
-        foreach (var property in json.Properties())
-        {
-            if (sensitiveKeys.Contains(property.Name))
-            {
-                propertiesToMask.Add(property);
-            }
-            else if (property.Value is JObject nestedObject)
-            {
-                RemoveSensitiveData(nestedObject, sensitiveKeys);
-            }
-        }
 
-        // Mask the collected properties
-        foreach (var property in propertiesToMask)
-        {
-            property.Value = "****"; // Mask the sensitive data
-        }
-    }
+// src/store/store.ts
+import { configureStore } from '@reduxjs/toolkit';
+import logsReducer from '../slices/logsSlice';
+
+const store = configureStore({
+  reducer: {
+    logs: logsReducer,
+  },
+});
+
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+
+export default store;
+
+
+
+
+
+
+// src/slices/logsSlice.ts
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import axios from 'axios';
+
+interface LogEntry {
+  monitor: string;
+  status: string;
+  location: string;
+  date: string;
 }
+
+interface LogsState {
+  logs: LogEntry[];
+  filteredLogs: LogEntry[];
+  loading: boolean;
+  error: string | null;
+}
+
+const initialState: LogsState = {
+  logs: [],
+  filteredLogs: [],
+  loading: false,
+  error: null,
+};
+
+export const fetchLogs = createAsyncThunk('logs/fetchLogs', async () => {
+  const response = await axios.get('http://localhost:5000/api/logs');
+  return response.data;
+});
+
+const logsSlice = createSlice({
+  name: 'logs',
+  initialState,
+  reducers: {
+    filterLogs: (state, action: PayloadAction<string>) => {
+      const query = action.payload.toLowerCase();
+      state.filteredLogs = state.logs.filter(
+        (log) =>
+          log.monitor.toLowerCase().includes(query) ||
+          log.status.toLowerCase().includes(query) ||
+          log.location.toLowerCase().includes(query)
+      );
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchLogs.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchLogs.fulfilled, (state, action: PayloadAction<LogEntry[]>) => {
+        state.logs = action.payload;
+        state.filteredLogs = action.payload;
+        state.loading = false;
+      })
+      .addCase(fetchLogs.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Something went wrong';
+      });
+  },
+});
+
+export const { filterLogs } = logsSlice.actions;
+
+export default logsSlice.reducer;
+
+
+
+
+
+// src/components/SearchComponent.tsx
+import React, { useState } from 'react';
+import { TextField, Button } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import { filterLogs } from '../slices/logsSlice';
+
+const SearchComponent: React.FC = () => {
+  const [query, setQuery] = useState('');
+  const dispatch = useDispatch();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    dispatch(filterLogs(query));
+  };
+
+  return (
+    <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px' }}>
+      <TextField
+        label="Search by monitor name"
+        variant="outlined"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <Button variant="contained" color="primary" type="submit">
+        Search
+      </Button>
+    </form>
+  );
+};
+
+export default SearchComponent;
+
+
+
+
+
+
+
+
+
+
+// src/components/FilterComponent.tsx
+import React, { useState } from 'react';
+import { TextField, Button } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import { filterLogs } from '../slices/logsSlice';
+
+const FilterComponent: React.FC = () => {
+  const [filter, setFilter] = useState('');
+  const dispatch = useDispatch();
+
+  const handleFilter = (e: React.FormEvent) => {
+    e.preventDefault();
+    dispatch(filterLogs(filter));
+  };
+
+  return (
+    <form onSubmit={handleFilter} style={{ display: 'flex', gap: '10px' }}>
+      <TextField
+        label="Filter by code or location"
+        variant="outlined"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
+      <Button variant="contained" color="secondary" type="submit">
+        Filter
+      </Button>
+    </form>
+  );
+};
+
+export default FilterComponent;
+
+
+
+
+
+// src/components/LogTable.tsx
+import React from 'react';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store/store';
+
+const LogTable: React.FC = () => {
+  const { filteredLogs, loading, error } = useSelector((state: RootState) => state.logs);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <TableContainer component={Paper}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Monitor</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Location</TableCell>
+            <TableCell>Date</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {filteredLogs.map((log, index) => (
+            <TableRow key={index}>
+              <TableCell>{log.monitor}</TableCell>
+              <TableCell>{log.status}</TableCell>
+              <TableCell>{log.location}</TableCell>
+              <TableCell>{log.date}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+};
+
+export default LogTable;
+
+
+
+
+
+
+
+
+
+
+// src/App.tsx
+import React, { useEffect } from 'react';
+import { Container, Typography } from '@mui/material';
+import { useDispatch } from 'react-redux';
+import { fetchLogs } from './slices/logsSlice';
+import SearchComponent from './components/SearchComponent';
+import FilterComponent from './components/FilterComponent';
+import LogTable from './components/LogTable';
+import './App.css';
+
+const App: React.FC = () => {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    dispatch(fetchLogs());
+  }, [dispatch]);
+
+  return (
+    <Container>
+      <Typography variant="h4" gutterBottom>
+        Error Logs Dashboard
+      </Typography>
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+        <SearchComponent />
+        <FilterComponent />
+      </div>
+      <LogTable />
+    </Container>
+  );
+};
+
+export default App;
+
+
+
+
+
+
+
+// src/main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { Provider } from 'react-redux';
+import store from './store/store';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <Provider store={store}>
+    <App />
+  </Provider>
+);
