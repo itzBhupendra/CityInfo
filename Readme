@@ -1,18 +1,56 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchLogs } from './slices/logsSlice';
 import { RootState, AppDispatch } from './store/store';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import {
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Paper
+} from '@mui/material';
+import { LogEntry } from './slices/logsSlice'; // Make sure the LogEntry interface is exported
+
+type Order = 'asc' | 'desc';
+
+interface HeadCell {
+  id: keyof LogEntry;
+  label: string;
+}
+
+const headCells: HeadCell[] = [
+  { id: 'dateTime', label: 'Date Time' },
+  { id: 'logLevel', label: 'Log Level' },
+  { id: 'correlationId', label: 'Correlation ID' },
+  { id: 'message', label: 'Message' },
+];
 
 const LogTable: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>(); // Type the dispatch function
+  const dispatch = useDispatch<AppDispatch>();
   const logs = useSelector((state: RootState) => state.logs.logs);
   const loading = useSelector((state: RootState) => state.logs.loading);
   const error = useSelector((state: RootState) => state.logs.error);
 
+  const [order, setOrder] = useState<Order>('asc');
+  const [orderBy, setOrderBy] = useState<keyof LogEntry>('dateTime');
+
   useEffect(() => {
     dispatch(fetchLogs());
   }, [dispatch]);
+
+  const handleRequestSort = (property: keyof LogEntry) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const sortedLogs = [...logs].sort((a, b) => {
+    if (orderBy === 'dateTime') {
+      return order === 'asc'
+        ? new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime()
+        : new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime();
+    } else {
+      return order === 'asc'
+        ? (a[orderBy] < b[orderBy] ? -1 : 1)
+        : (a[orderBy] > b[orderBy] ? -1 : 1);
+    }
+  });
 
   return (
     <TableContainer component={Paper}>
@@ -22,96 +60,8 @@ const LogTable: React.FC = () => {
       <Table>
         <TableHead>
           <TableRow>
-            <TableCell>Date Time</TableCell>
-            <TableCell>Log Level</TableCell>
-            <TableCell>Correlation ID</TableCell>
-            <TableCell>Message</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {logs.map((log, index) => (
-            <TableRow key={index}>
-              <TableCell>{log.dateTime}</TableCell>
-              <TableCell>{log.logLevel}</TableCell>
-              <TableCell>{log.correlationId}</TableCell>
-              <TableCell>{log.message}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-};
-
-export default LogTable;
-
-
-
-
-
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import axiosInstance from '../axiosInstance';
-
-interface LogEntry {
-  dateTime: string;
-  logLevel: string;
-  correlationId: string;
-  message: string;
-}
-
-interface LogsState {
-  logs: LogEntry[];
-  filteredLogs: LogEntry[];
-  loading: boolean;
-  error: string | null;
-}
-
-const initialState: LogsState = {
-  logs: [],
-  filteredLogs: [],
-  loading: false,
-  error: null,
-};
-
-export const fetchLogs = createAsyncThunk('logs/fetchLogs', async () => {
-  const response = await axiosInstance.get('/logs');
-  return response.data;
-});
-
-const logsSlice = createSlice({
-  name: 'logs',
-  initialState,
-  reducers: {
-    filterLogs: (state, action: PayloadAction<string>) => {
-      const query = action.payload.toLowerCase();
-      state.filteredLogs = state.logs.filter(
-        (log) =>
-          log.correlationId.toLowerCase().includes(query) ||
-          log.message.toLowerCase().includes(query) ||
-          log.logLevel.toLowerCase().includes(query)
-      );
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchLogs.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchLogs.fulfilled, (state, action: PayloadAction<LogEntry[]>) => {
-        state.logs = action.payload;
-        state.filteredLogs = action.payload;
-        state.loading = false;
-      })
-      .addCase(fetchLogs.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.error.message || 'Something went wrong';
-      });
-  },
-});
-
-export const { filterLogs } = logsSlice.actions;
-
-export default logsSlice.reducer;
-
-
+            {headCells.map((headCell) => (
+              <TableCell key={headCell.id}>
+                <TableSortLabel
+                  active={orderBy === headCell.id}
+                  direction={orderBy === 
