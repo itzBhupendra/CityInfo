@@ -1,73 +1,38 @@
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 using System;
-using System.IO;
+using System.Collections.Generic;
 
-public class ServiceLoggerProvider : ILoggerProvider
+public static class LoggerExtensions
 {
-    private readonly LogLevel _logLevel;
-
-    public ServiceLoggerProvider(LogLevel logLevel)
+    public static void LogFilteredJson(this ILogger logger, string jsonString, EventId eventId)
     {
-        _logLevel = logLevel;
+        var json = JObject.Parse(jsonString);
+        RemoveSensitiveData(json, SensitiveDataKeys.Keys);
+        logger.LogInformation(eventId, json.ToString());
     }
 
-    public ILogger CreateLogger(string categoryName)
+    private static void RemoveSensitiveData(JObject json, HashSet<string> sensitiveKeys)
     {
-        string logFilePath = $"logs/log_{categoryName}_{Guid.NewGuid()}.txt"; // Generate a unique log file path
-        return new ServiceLogger(logFilePath, _logLevel);
-    }
+        var propertiesToMask = new List<JProperty>();
 
-    public void Dispose() { }
-}
-
-public class ServiceLogger : ILogger
-{
-    private readonly string _logFilePath;
-    private readonly LogLevel _logLevel;
-    private readonly object _lock = new object();
-
-    public ServiceLogger(string logFilePath, LogLevel logLevel)
-    {
-        _logFilePath = logFilePath;
-        _logLevel = logLevel;
-    }
-
-    public IDisposable BeginScope<TState>(TState state) => null;
-
-    public bool IsEnabled(LogLevel logLevel) => logLevel >= _logLevel;
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-    {
-        if (!IsEnabled(logLevel))
-            return;
-
-        var logEntry = new LogEntry
+        // Collect properties to mask to avoid modifying the collection while iterating
+        foreach (var property in json.Properties())
         {
-            Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            LogLevel = logLevel.ToString(),
-            Message = formatter(state, exception),
-            Exception = exception?.ToString()
-        };
-
-        var logMessage = FormatLogMessage(logEntry);
-
-        lock (_lock)
-        {
-            File.AppendAllText(_logFilePath, logMessage);
+            if (sensitiveKeys.Contains(property.Name))
+            {
+                propertiesToMask.Add(property);
+            }
+            else if (property.Value is JObject nestedObject)
+            {
+                RemoveSensitiveData(nestedObject, sensitiveKeys);
+            }
         }
-    }
 
-    private string FormatLogMessage(LogEntry logEntry)
-    {
-        return $"[{logEntry.Timestamp}] [{logEntry.LogLevel}]: {logEntry.Message}{Environment.NewLine}" +
-               (logEntry.Exception != null ? $"Exception: {logEntry.Exception}{Environment.NewLine}" : "");
-    }
-
-    private class LogEntry
-    {
-        public string Timestamp { get; set; }
-        public string LogLevel { get; set; }
-        public string Message { get; set; }
-        public string Exception { get; set; }
+        // Mask the collected properties
+        foreach (var property in propertiesToMask)
+        {
+            property.Value = "****"; // Mask the sensitive data
+        }
     }
 }
