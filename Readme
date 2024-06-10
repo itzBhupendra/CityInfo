@@ -15,27 +15,30 @@ namespace LogDashboardApi.Controllers
     public class LogsController : ControllerBase
     {
         private readonly ILogger<LogsController> _logger;
-        private readonly string _logDirectory;
 
         public LogsController(ILogger<LogsController> logger)
         {
             _logger = logger;
-            _logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs"); // Assuming logs are stored in a "Logs" directory
         }
 
         [HttpGet]
-        public async Task<IActionResult> Get(string correlationId)
+        public async Task<IActionResult> Get(string correlationId, string basePath)
         {
             if (string.IsNullOrEmpty(correlationId))
             {
                 return BadRequest("CorrelationId is required.");
             }
 
+            if (string.IsNullOrEmpty(basePath) || !Directory.Exists(basePath))
+            {
+                return BadRequest("Valid base path is required.");
+            }
+
             var logResults = new List<LogResult>();
 
             try
             {
-                var logFiles = Directory.GetFiles(_logDirectory, "*.txt");
+                var logFiles = GetAllLogFiles(basePath);
                 foreach (var logFile in logFiles)
                 {
                     var lines = await System.IO.File.ReadAllLinesAsync(logFile);
@@ -49,6 +52,21 @@ namespace LogDashboardApi.Controllers
                 _logger.LogError(ex, "Error reading log files.");
                 return StatusCode(500, "Internal server error");
             }
+        }
+
+        private IEnumerable<string> GetAllLogFiles(string basePath)
+        {
+            var logFiles = new List<string>();
+            var directories = Directory.GetDirectories(basePath);
+
+            foreach (var directory in directories)
+            {
+                logFiles.AddRange(GetAllLogFiles(directory));
+            }
+
+            logFiles.AddRange(Directory.GetFiles(basePath, "*.txt"));
+
+            return logFiles;
         }
 
         private IEnumerable<LogResult> ParseLogLines(string[] lines, string correlationId)
