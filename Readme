@@ -1,121 +1,145 @@
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from './redux/store';
-import { fetchLogs } from './redux/logSlice';
-import { TextField, Button, CircularProgress, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel } from '@mui/material';
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using LogDashboardApi.Models;
 
-const LogTable: React.FC = () => {
-  const dispatch = useDispatch();
-  const logs = useSelector((state: RootState) => state.logs.logs);
-  const status = useSelector((state: RootState) => state.logs.status);
-  const error = useSelector((state: RootState) => state.logs.error);
+namespace LogDashboardApi.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class LogsController : ControllerBase
+    {
+        private readonly ILogger<LogsController> _logger;
 
-  const [correlationId, setCorrelationId] = useState('');
-  const [basePath, setBasePath] = useState('');
-  const [orderBy, setOrderBy] = useState<keyof LogEntry>('dateTime');
-  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+        public LogsController(ILogger<LogsController> logger)
+        {
+            _logger = logger;
+        }
 
-  const handleSearch = () => {
-    dispatch(fetchLogs({ correlationId, basePath }));
-  };
+        [HttpGet("{correlationId}")]
+        public async Task<IActionResult> Get(string correlationId, [FromQuery] string basePath)
+        {
+            if (string.IsNullOrEmpty(correlationId))
+            {
+                return BadRequest("CorrelationId is required.");
+            }
 
-  const handleRequestSort = (property: keyof LogEntry) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-  };
+            if (string.IsNullOrEmpty(basePath) || !Directory.Exists(basePath))
+            {
+                return BadRequest("Valid base path is required.");
+            }
 
-  const sortedLogs = logs.slice().sort((a, b) => {
-    if (a[orderBy] < b[orderBy]) {
-      return order === 'asc' ? -1 : 1;
+            var logResults = new List<LogResult>();
+
+            try
+            {
+                var logFiles = GetAllLogFiles(basePath);
+                foreach (var logFile in logFiles)
+                {
+                    var lines = await System.IO.File.ReadAllLinesAsync(logFile);
+                    logResults.AddRange(ParseLogLines(lines, correlationId));
+                }
+
+                return Ok(logResults);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading log files.");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        private IEnumerable<string> GetAllLogFiles(string basePath)
+        {
+            var logFiles = new List<string>();
+            var directories = Directory.GetDirectories(basePath);
+
+            foreach (var directory in directories)
+            {
+                logFiles.AddRange(GetAllLogFiles(directory));
+            }
+
+            logFiles.AddRange(Directory.GetFiles(basePath, "*.txt"));
+
+            return logFiles;
+        }
+
+        private IEnumerable<LogResult> ParseLogLines(string[] lines, string correlationId)
+        {
+            var logResults = new List<LogResult>();
+            LogResult currentLogEntry = null;
+            var messageBuilder = new List<string>();
+
+            foreach (var line in lines)
+            {
+                if (IsNewLogEntry(line))
+                {
+                    // Add the previous log entry to the results if it matches the correlationId
+                    if (currentLogEntry != null && currentLogEntry.CorrelationId == correlationId)
+                    {
+                        currentLogEntry.Message = string.Join(Environment.NewLine, messageBuilder);
+                        logResults.Add(currentLogEntry);
+                    }
+
+                    // Start a new log entry
+                    currentLogEntry = ParseLogHeader(line);
+                    messageBuilder.Clear();
+                    if (currentLogEntry != null)
+                    {
+                        messageBuilder.Add(currentLogEntry.Message);
+                        currentLogEntry.Message = null; // Clear the message since it is already added to the builder
+                    }
+                }
+                else if (currentLogEntry != null)
+                {
+                    // Continue appending lines to the current log entry's message
+                    messageBuilder.Add(line);
+                }
+            }
+
+            // Add the last log entry to the results if it matches the correlationId
+            if (currentLogEntry != null && currentLogEntry.CorrelationId == correlationId)
+            {
+                currentLogEntry.Message = string.join(Environment.NewLine, messageBuilder);
+                logResults.Add(currentLogEntry);
+            }
+
+            return logResults;
+        }
+
+        private bool IsNewLogEntry(string line)
+        {
+            // Assuming log entries start with a date in the format: [MM/dd/yyyy hh:mm:ss.fff]
+            return Regex.IsMatch(line, @"^\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}\]");
+        }
+
+        private LogResult ParseLogHeader(string line)
+        {
+            try
+            {
+                var match = Regex.Match(line, @"^\[(?<dateTime>\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3})\] \[(?<logLevel>.+?)\] \[(?<correlationId>[0-9a-fA-F-]{36})\] : (?<message>.+)$");
+                if (match.Success)
+                {
+                    return new LogResult
+                    {
+                        DateTime = DateTime.ParseExact(match.Groups["dateTime"].Value, "MM/dd/yyyy HH:mm:ss.fff", null),
+                        LogLevel = match.Groups["logLevel"].Value,
+                        CorrelationId = match.Groups["correlationId"].Value,
+                        Message = match.Groups["message"].Value // Initial part of the message
+                    };
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors and return null
+            }
+
+            return null;
+        }
     }
-    if (a[orderBy] > b[orderBy]) {
-      return order === 'asc' ? 1 : -1;
-    }
-    return 0;
-  });
-
-  return (
-    <div>
-      <div style={{ marginBottom: '20px' }}>
-        <TextField
-          label="Correlation ID"
-          value={correlationId}
-          onChange={(e) => setCorrelationId(e.target.value)}
-          style={{ marginRight: '10px' }}
-        />
-        <TextField
-          label="Base Path"
-          value={basePath}
-          onChange={(e) => setBasePath(e.target.value)}
-          style={{ marginRight: '10px' }}
-        />
-        <Button variant="contained" color="primary" onClick={handleSearch}>
-          Search
-        </Button>
-      </div>
-
-      {status === 'loading' && <CircularProgress />}
-      {status === 'failed' && <div>{error}</div>}
-
-      {status === 'succeeded' && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'dateTime'}
-                    direction={orderBy === 'dateTime' ? order : 'asc'}
-                    onClick={() => handleRequestSort('dateTime')}
-                  >
-                    Date Time
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'logLevel'}
-                    direction={orderBy === 'logLevel' ? order : 'asc'}
-                    onClick={() => handleRequestSort('logLevel')}
-                  >
-                    Log Level
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'correlationId'}
-                    direction={orderBy === 'correlationId' ? order : 'asc'}
-                    onClick={() => handleRequestSort('correlationId')}
-                  >
-                    Correlation ID
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'message'}
-                    direction={orderBy === 'message' ? order : 'asc'}
-                    onClick={() => handleRequestSort('message')}
-                  >
-                    Message
-                  </TableSortLabel>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedLogs.map((log, index) => (
-                <TableRow key={index}>
-                  <TableCell>{log.dateTime}</TableCell>
-                  <TableCell>{log.logLevel}</TableCell>
-                  <TableCell>{log.correlationId}</TableCell>
-                  <TableCell>{log.message}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </div>
-  );
-};
-
-export default LogTable;
+}
