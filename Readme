@@ -42,7 +42,8 @@ namespace LogDashboardApi.Controllers
                 foreach (var logFile in logFiles)
                 {
                     var lines = await System.IO.File.ReadAllLinesAsync(logFile);
-                    logResults.AddRange(ParseLogLines(lines, correlationId));
+                    var folderName = new DirectoryInfo(Path.GetDirectoryName(logFile)).Name;
+                    logResults.AddRange(ParseLogLines(lines, correlationId, folderName));
                 }
 
                 return Ok(logResults);
@@ -69,7 +70,7 @@ namespace LogDashboardApi.Controllers
             return logFiles;
         }
 
-        private IEnumerable<LogResult> ParseLogLines(string[] lines, string correlationId)
+        private IEnumerable<LogResult> ParseLogLines(string[] lines, string correlationId, string folderName)
         {
             var logResults = new List<LogResult>();
             LogResult currentLogEntry = null;
@@ -79,33 +80,29 @@ namespace LogDashboardApi.Controllers
             {
                 if (IsNewLogEntry(line))
                 {
-                    // Add the previous log entry to the results if it matches the correlationId
                     if (currentLogEntry != null && currentLogEntry.CorrelationId == correlationId)
                     {
                         currentLogEntry.Message = string.Join(Environment.NewLine, messageBuilder);
                         logResults.Add(currentLogEntry);
                     }
 
-                    // Start a new log entry
-                    currentLogEntry = ParseLogHeader(line);
+                    currentLogEntry = ParseLogHeader(line, folderName);
                     messageBuilder.Clear();
                     if (currentLogEntry != null)
                     {
                         messageBuilder.Add(currentLogEntry.Message);
-                        currentLogEntry.Message = null; // Clear the message since it is already added to the builder
+                        currentLogEntry.Message = null;
                     }
                 }
                 else if (currentLogEntry != null)
                 {
-                    // Continue appending lines to the current log entry's message
                     messageBuilder.Add(line);
                 }
             }
 
-            // Add the last log entry to the results if it matches the correlationId
             if (currentLogEntry != null && currentLogEntry.CorrelationId == correlationId)
             {
-                currentLogEntry.Message = string.join(Environment.NewLine, messageBuilder);
+                currentLogEntry.Message = string.Join(Environment.NewLine, messageBuilder);
                 logResults.Add(currentLogEntry);
             }
 
@@ -114,11 +111,10 @@ namespace LogDashboardApi.Controllers
 
         private bool IsNewLogEntry(string line)
         {
-            // Assuming log entries start with a date in the format: [MM/dd/yyyy hh:mm:ss.fff]
             return Regex.IsMatch(line, @"^\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{3}\]");
         }
 
-        private LogResult ParseLogHeader(string line)
+        private LogResult ParseLogHeader(string line, string folderName)
         {
             try
             {
@@ -130,7 +126,8 @@ namespace LogDashboardApi.Controllers
                         DateTime = DateTime.ParseExact(match.Groups["dateTime"].Value, "MM/dd/yyyy HH:mm:ss.fff", null),
                         LogLevel = match.Groups["logLevel"].Value,
                         CorrelationId = match.Groups["correlationId"].Value,
-                        Message = match.Groups["message"].Value // Initial part of the message
+                        Message = match.Groups["message"].Value,
+                        LogFolderName = folderName  // Include the folder name
                     };
                 }
             }
