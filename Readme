@@ -136,4 +136,64 @@ const LogTable: React.FC = () => {
   );
 };
 
-export default LogTable;
+export default Log
+
+
+
+
+
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import axiosInstance from '../axiosInstance';
+
+interface LogEntry {
+  dateTime: string;
+  logLevel: string;
+  correlationId: string;
+  message: string;
+  logFolderName: string;  // New property
+}
+
+interface LogsState {
+  logs: LogEntry[];
+  status: 'idle' | 'loading' | 'succeeded' | 'failed';
+  error: string | null;
+}
+
+const initialState: LogsState = {
+  logs: [],
+  status: 'idle',
+  error: null,
+};
+
+export const fetchLogs = createAsyncThunk(
+  'logs/fetchLogs',
+  async ({ correlationId, basePath }: { correlationId: string; basePath: string }) => {
+    const response = await axiosInstance.get(`/api/logs/${correlationId}`, {
+      params: { basePath },
+    });
+    return response.data;
+  }
+);
+
+const logsSlice = createSlice({
+  name: 'logs',
+  initialState,
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchLogs.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(fetchLogs.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.logs = action.payload;
+      })
+      .addCase(fetchLogs.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.error.message || null;
+      });
+  },
+});
+
+export default logsSlice.reducer;
+
