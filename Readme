@@ -1,38 +1,127 @@
-public class SearchController : ControllerBase
-    {
-        private readonly string[] logFiles = new[]
-        {
-            "path/to/api1/log.txt",
-            "path/to/api2/log.txt",
-            "path/to/api3/log.txt"
-        };
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using LogDashboardApi.Models;
 
-        [HttpGet("{correlationId}")]
+namespace LogDashboardApi.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class LogsController : ControllerBase
+    {
+        private readonly ILogger<LogsController> _logger;
+        private readonly string _logDirectory;
+
+        public LogsController(ILogger<LogsController> logger)
+        {
+            _logger = logger;
+            _logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs"); // Assuming logs are stored in a "Logs" directory
+        }
+
+        [HttpGet]
         public async Task<IActionResult> Get(string correlationId)
         {
-            var allLogs = new List<string>();
-
-            // Read all log files and aggregate the lines
-            foreach (var logFile in logFiles)
+            if (string.IsNullOrEmpty(correlationId))
             {
-                if (System.IO.File.Exists(logFile))
+                return BadRequest("CorrelationId is required.");
+            }
+
+            var logResults = new List<LogResult>();
+
+            try
+            {
+                var logFiles = Directory.GetFiles(_logDirectory, "*.txt");
+                foreach (var logFile in logFiles)
                 {
                     var lines = await System.IO.File.ReadAllLinesAsync(logFile);
-                    allLogs.AddRange(lines);
+                    logResults.AddRange(ParseLogLines(lines, correlationId));
+                }
+
+                return Ok(logResults);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading log files.");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        private IEnumerable<LogResult> ParseLogLines(string[] lines, string correlationId)
+        {
+            var logResults = new List<LogResult>();
+            LogResult currentLogEntry = null;
+            var messageBuilder = new List<string>();
+
+            foreach (var line in lines)
+            {
+                if (IsNewLogEntry(line))
+                {
+                    // Add the previous log entry to the results if it matches the correlationId
+                    if (currentLogEntry != null && currentLogEntry.CorrelationId == correlationId)
+                    {
+                        currentLogEntry.Message = string.Join(Environment.NewLine, messageBuilder);
+                        logResults.Add(currentLogEntry);
+                    }
+
+                    // Start a new log entry
+                    currentLogEntry = ParseLogHeader(line);
+                    messageBuilder.Clear();
+                    if (currentLogEntry != null)
+                    {
+                        messageBuilder.Add(currentLogEntry.Message);
+                        currentLogEntry.Message = null; // Clear the message since it is already added to the builder
+                    }
+                }
+                else if (currentLogEntry != null)
+                {
+                    // Continue appending lines to the current log entry's message
+                    messageBuilder.Add(line);
                 }
             }
 
-            // Find the first and last occurrence of the Correlation ID
-            var firstIndex = allLogs.FindIndex(line => line.Contains(correlationId));
-            var lastIndex = allLogs.FindLastIndex(line => line.Contains(correlationId));
-
-            if (firstIndex == -1 || lastIndex == -1)
+            // Add the last log entry to the results if it matches the correlationId
+            if (currentLogEntry != null && currentLogEntry.CorrelationId == correlationId)
             {
-                return NotFound("Correlation ID not found in logs.");
+                currentLogEntry.Message = string.Join(Environment.NewLine, messageBuilder);
+                logResults.Add(currentLogEntry);
             }
 
-            // Get all entries between the first and last occurrence
-            var resultLogs = allLogs.Skip(firstIndex).Take(lastIndex - firstIndex + 1).ToList();
-
-            return Ok(resultLogs);
+            return logResults;
         }
+
+        private bool IsNewLogEntry(string line)
+        {
+            // Assuming log entries start with a date in the format: [DateTime]
+            return Regex.IsMatch(line, @"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\]");
+        }
+
+        private LogResult ParseLogHeader(string line)
+        {
+            try
+            {
+                var match = Regex.Match(line, @"^\[(?<dateTime>.+?)\] \[(?<logLevel>.+?)\] \[(?<correlationId>.+?)\] (?<message>.+)$");
+                if (match.Success)
+                {
+                    return new LogResult
+                    {
+                        DateTime = DateTime.Parse(match.Groups["dateTime"].Value),
+                        LogLevel = match.Groups["logLevel"].Value,
+                        CorrelationId = match.Groups["correlationId"].Value,
+                        Message = match.Groups["message"].Value // Initial part of the message
+                    };
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors and return null
+            }
+
+            return null;
+        }
+    }
+}
