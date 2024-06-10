@@ -1,91 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchLogs } from './slices/logsSlice';
-import { RootState, AppDispatch } from './store/store';
-import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Paper
-} from '@mui/material';
-import { LogEntry } from './slices/logsSlice'; // Import the LogEntry interface
+public class SearchController : ControllerBase
+    {
+        private readonly string[] logFiles = new[]
+        {
+            "path/to/api1/log.txt",
+            "path/to/api2/log.txt",
+            "path/to/api3/log.txt"
+        };
 
-type Order = 'asc' | 'desc';
+        [HttpGet("{correlationId}")]
+        public async Task<IActionResult> Get(string correlationId)
+        {
+            var allLogs = new List<string>();
 
-interface HeadCell {
-  id: keyof LogEntry;
-  label: string;
-}
+            // Read all log files and aggregate the lines
+            foreach (var logFile in logFiles)
+            {
+                if (System.IO.File.Exists(logFile))
+                {
+                    var lines = await System.IO.File.ReadAllLinesAsync(logFile);
+                    allLogs.AddRange(lines);
+                }
+            }
 
-const headCells: HeadCell[] = [
-  { id: 'dateTime', label: 'Date Time' },
-  { id: 'logLevel', label: 'Log Level' },
-  { id: 'correlationId', label: 'Correlation ID' },
-  { id: 'message', label: 'Message' },
-];
+            // Find the first and last occurrence of the Correlation ID
+            var firstIndex = allLogs.FindIndex(line => line.Contains(correlationId));
+            var lastIndex = allLogs.FindLastIndex(line => line.Contains(correlationId));
 
-const LogTable: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>();
-  const logs = useSelector((state: RootState) => state.logs.logs);
-  const loading = useSelector((state: RootState) => state.logs.loading);
-  const error = useSelector((state: RootState) => state.logs.error);
+            if (firstIndex == -1 || lastIndex == -1)
+            {
+                return NotFound("Correlation ID not found in logs.");
+            }
 
-  const [order, setOrder] = useState<Order>('asc');
-  const [orderBy, setOrderBy] = useState<keyof LogEntry>('dateTime');
+            // Get all entries between the first and last occurrence
+            var resultLogs = allLogs.Skip(firstIndex).Take(lastIndex - firstIndex + 1).ToList();
 
-  useEffect(() => {
-    dispatch(fetchLogs());
-  }, [dispatch]);
-
-  const handleRequestSort = (property: keyof LogEntry) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-  };
-
-  const sortedLogs = [...logs].sort((a, b) => {
-    if (orderBy === 'dateTime') {
-      return order === 'asc'
-        ? new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime()
-        : new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime();
-    } else {
-      return order === 'asc'
-        ? (a[orderBy] < b[orderBy] ? -1 : 1)
-        : (a[orderBy] > b[orderBy] ? -1 : 1);
-    }
-  });
-
-  return (
-    <TableContainer component={Paper}>
-      <h1>Log Dashboard</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p>Error: {error}</p>}
-      <Table>
-        <TableHead>
-          <TableRow>
-            {headCells.map((headCell) => (
-              <TableCell key={headCell.id}>
-                <TableSortLabel
-                  active={orderBy === headCell.id}
-                  direction={orderBy === headCell.id ? order : 'asc'}
-                  onClick={() => handleRequestSort(headCell.id)}
-                >
-                  {headCell.label}
-                </TableSortLabel>
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {sortedLogs.map((log, index) => (
-            <TableRow key={index}>
-              <TableCell>{log.dateTime}</TableCell>
-              <TableCell>{log.logLevel}</TableCell>
-              <TableCell>{log.correlationId}</TableCell>
-              <TableCell>{log.message}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-};
-
-export default LogTable;
+            return Ok(resultLogs);
+        }
