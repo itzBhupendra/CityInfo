@@ -1,30 +1,122 @@
-using Microsoft.Extensions.Logging;
+public interface IScopedContext
+{
+    string CorrelationId { get; set; }
+}
 
-public class QFileLoggerProvider : ILoggerProvider
+public class ScopedContext : IScopedContext
+{
+    private static readonly AsyncLocal<string> _correlationId = new AsyncLocal<string>();
+
+    public string CorrelationId
+    {
+        get => _correlationId.Value;
+        set => _correlationId.Value = value;
+    }
+} 
+
+
+
+
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class QFileLogger : ILogger
 {
     private readonly string _filePath;
+    private readonly BlockingCollection<string> _logQueue = new BlockingCollection<string>();
+    private readonly Task _logProcessorTask;
+    private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+    private readonly IServiceProvider _serviceProvider;
 
-    public QFileLoggerProvider(string filePath)
+    public QFileLogger(string filePath, IServiceProvider serviceProvider)
     {
         _filePath = filePath;
+        _serviceProvider = serviceProvider;
+
+        // Start the log processing task
+        _logProcessorTask = Task.Factory.StartNew(ProcessLogQueue, _cancellationTokenSource.Token,
+            TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    public ILogger CreateLogger(string categoryName)
+    public IDisposable BeginScope<TState>(TState state) => null;
+
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
     {
-        return new QFileLogger(_filePath);
+        if (!IsEnabled(logLevel)) return;
+
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var scopedContext = scope.ServiceProvider.GetRequiredService<IScopedContext>();
+            var correlationId = scopedContext.CorrelationId;
+            var logEntry = $"[{correlationId}] {formatter(state, exception)}";
+
+            _logQueue.Add(logEntry);
+        }
+    }
+
+    private void ProcessLogQueue()
+    {
+        try
+        {
+            foreach (var logEntry in _logQueue.GetConsumingEnumerable(_cancellationTokenSource.Token))
+            {
+                try
+                {
+                    File.AppendAllText(_filePath, logEntry + Environment.NewLine);
+                }
+                catch (IOException ex)
+                {
+                    // Handle file I/O exceptions if necessary
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Handle task cancellation
+        }
     }
 
     public void Dispose()
     {
-        // Cleanup if necessary
+        _cancellationTokenSource.Cancel();
+        _logQueue.CompleteAdding();
+        _logProcessorTask.Wait();
     }
-}
+}  
 
-public static class QFileLoggerExtensions
+
+
+
+public class Startup
 {
-    public static ILoggingBuilder AddQFileLogger(this ILoggingBuilder builder, string filePath)
+    public void ConfigureServices(IServiceCollection services)
     {
-        builder.Services.AddSingleton<ILoggerProvider>(provider => new QFileLoggerProvider(filePath));
-        return builder;
+        services.AddLogging(configure => configure.AddQFileLogger("logfile.txt"))
+                .Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Information);
+
+        services.AddScoped<IScopedContext, ScopedContext>();
+
+        services.AddTransient<MyService>();
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Headers.TryGetValue("X-Correlation-ID", out var correlationId))
+            {
+                var scopedContext = context.RequestServices.GetRequiredService<IScopedContext>();
+                scopedContext.CorrelationId = correlationId;
+            }
+            await next.Invoke();
+        });
+
+        // Other middleware configuration
     }
 }
