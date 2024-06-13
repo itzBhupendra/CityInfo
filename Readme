@@ -1,199 +1,64 @@
-import React, { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from './redux/store';
-import { fetchLogs } from './redux/logSlice';
-import { TextField, Button, CircularProgress, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel } from '@mui/material';
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
-interface LogEntry {
-  dateTime: string;
-  logLevel: string;
-  correlationId: string;
-  message: string;
-  logFolderName: string;  // New property
-}
+public class QFileLogger : ILogger
+{
+    private readonly string _filePath;
+    private readonly BlockingCollection<string> _logQueue = new BlockingCollection<string>();
+    private readonly Task _logProcessorTask;
+    private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
-const LogTable: React.FC = () => {
-  const dispatch = useDispatch();
-  const logs = useSelector((state: RootState) => state.logs.logs);
-  const status = useSelector((state: RootState) => state.logs.status);
-  const error = useSelector((state: RootState) => state.logs.error);
+    public QFileLogger(string filePath)
+    {
+        _filePath = filePath;
 
-  const [correlationId, setCorrelationId] = useState('');
-  const [basePath, setBasePath] = useState('');
-  const [orderBy, setOrderBy] = useState<keyof LogEntry>('dateTime');
-  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
-
-  const handleSearch = () => {
-    dispatch(fetchLogs({ correlationId, basePath }));
-  };
-
-  const handleRequestSort = (property: keyof LogEntry) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-  };
-
-  const sortedLogs = logs.slice().sort((a, b) => {
-    if (a[orderBy] < b[orderBy]) {
-      return order === 'asc' ? -1 : 1;
+        // Start the log processing task
+        _logProcessorTask = Task.Factory.StartNew(ProcessLogQueue, _cancellationTokenSource.Token,
+            TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
-    if (a[orderBy] > b[orderBy]) {
-      return order === 'asc' ? 1 : -1;
+
+    public IDisposable BeginScope<TState>(TState state) => null;
+
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+    {
+        if (!IsEnabled(logLevel)) return;
+
+        var logEntry = formatter(state, exception);
+        _logQueue.Add(logEntry);
     }
-    return 0;
-  });
 
-  return (
-    <div>
-      <div style={{ marginBottom: '20px' }}>
-        <TextField
-          label="Correlation ID"
-          value={correlationId}
-          onChange={(e) => setCorrelationId(e.target.value)}
-          style={{ marginRight: '10px' }}
-        />
-        <TextField
-          label="Base Path"
-          value={basePath}
-          onChange={(e) => setBasePath(e.target.value)}
-          style={{ marginRight: '10px' }}
-        />
-        <Button variant="contained" color="primary" onClick={handleSearch}>
-          Search
-        </Button>
-      </div>
+    private void ProcessLogQueue()
+    {
+        try
+        {
+            foreach (var logEntry in _logQueue.GetConsumingEnumerable(_cancellationTokenSource.Token))
+            {
+                try
+                {
+                    File.AppendAllText(_filePath, logEntry + Environment.NewLine);
+                }
+                catch (IOException ex)
+                {
+                    // Handle file I/O exceptions if necessary
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Handle task cancellation
+        }
+    }
 
-      {status === 'loading' && <CircularProgress />}
-      {status === 'failed' && <div>{error}</div>}
-
-      {status === 'succeeded' && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'dateTime'}
-                    direction={orderBy === 'dateTime' ? order : 'asc'}
-                    onClick={() => handleRequestSort('dateTime')}
-                  >
-                    Date Time
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'logLevel'}
-                    direction={orderBy === 'logLevel' ? order : 'asc'}
-                    onClick={() => handleRequestSort('logLevel')}
-                  >
-                    Log Level
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'correlationId'}
-                    direction={orderBy === 'correlationId' ? order : 'asc'}
-                    onClick={() => handleRequestSort('correlationId')}
-                  >
-                    Correlation ID
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'logFolderName'}
-                    direction={orderBy === 'logFolderName' ? order : 'asc'}
-                    onClick={() => handleRequestSort('logFolderName')}
-                  >
-                    Log Folder Name
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>
-                  <TableSortLabel
-                    active={orderBy === 'message'}
-                    direction={orderBy === 'message' ? order : 'asc'}
-                    onClick={() => handleRequestSort('message')}
-                  >
-                    Message
-                  </TableSortLabel>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedLogs.map((log, index) => (
-                <TableRow key={index}>
-                  <TableCell>{log.dateTime}</TableCell>
-                  <TableCell>{log.logLevel}</TableCell>
-                  <TableCell>{log.correlationId}</TableCell>
-                  <TableCell>{log.logFolderName}</TableCell>
-                  <TableCell>{log.message}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </div>
-  );
-};
-
-export default Log
-
-
-
-
-
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import axiosInstance from '../axiosInstance';
-
-interface LogEntry {
-  dateTime: string;
-  logLevel: string;
-  correlationId: string;
-  message: string;
-  logFolderName: string;  // New property
+    public void Dispose()
+    {
+        _cancellationTokenSource.Cancel();
+        _logQueue.CompleteAdding();
+        _logProcessorTask.Wait();
+    }
 }
-
-interface LogsState {
-  logs: LogEntry[];
-  status: 'idle' | 'loading' | 'succeeded' | 'failed';
-  error: string | null;
-}
-
-const initialState: LogsState = {
-  logs: [],
-  status: 'idle',
-  error: null,
-};
-
-export const fetchLogs = createAsyncThunk(
-  'logs/fetchLogs',
-  async ({ correlationId, basePath }: { correlationId: string; basePath: string }) => {
-    const response = await axiosInstance.get(`/api/logs/${correlationId}`, {
-      params: { basePath },
-    });
-    return response.data;
-  }
-);
-
-const logsSlice = createSlice({
-  name: 'logs',
-  initialState,
-  reducers: {},
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchLogs.pending, (state) => {
-        state.status = 'loading';
-      })
-      .addCase(fetchLogs.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.logs = action.payload;
-      })
-      .addCase(fetchLogs.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error = action.error.message || null;
-      });
-  },
-});
-
-export default logsSlice.reducer;
-
