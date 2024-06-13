@@ -1,64 +1,30 @@
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Concurrent;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 
-public class QFileLogger : ILogger
+public class QFileLoggerProvider : ILoggerProvider
 {
     private readonly string _filePath;
-    private readonly BlockingCollection<string> _logQueue = new BlockingCollection<string>();
-    private readonly Task _logProcessorTask;
-    private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
-    public QFileLogger(string filePath)
+    public QFileLoggerProvider(string filePath)
     {
         _filePath = filePath;
-
-        // Start the log processing task
-        _logProcessorTask = Task.Factory.StartNew(ProcessLogQueue, _cancellationTokenSource.Token,
-            TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    public IDisposable BeginScope<TState>(TState state) => null;
-
-    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+    public ILogger CreateLogger(string categoryName)
     {
-        if (!IsEnabled(logLevel)) return;
-
-        var logEntry = formatter(state, exception);
-        _logQueue.Add(logEntry);
-    }
-
-    private void ProcessLogQueue()
-    {
-        try
-        {
-            foreach (var logEntry in _logQueue.GetConsumingEnumerable(_cancellationTokenSource.Token))
-            {
-                try
-                {
-                    File.AppendAllText(_filePath, logEntry + Environment.NewLine);
-                }
-                catch (IOException ex)
-                {
-                    // Handle file I/O exceptions if necessary
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Handle task cancellation
-        }
+        return new QFileLogger(_filePath);
     }
 
     public void Dispose()
     {
-        _cancellationTokenSource.Cancel();
-        _logQueue.CompleteAdding();
-        _logProcessorTask.Wait();
+        // Cleanup if necessary
+    }
+}
+
+public static class QFileLoggerExtensions
+{
+    public static ILoggingBuilder AddQFileLogger(this ILoggingBuilder builder, string filePath)
+    {
+        builder.Services.AddSingleton<ILoggerProvider>(provider => new QFileLoggerProvider(filePath));
+        return builder;
     }
 }
