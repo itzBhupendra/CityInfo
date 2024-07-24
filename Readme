@@ -1,13 +1,14 @@
 using System;
 using System.Data.Common;
 using System.Threading;
+using System.Threading.Tasks;
 
 public class DatabaseHelper
 {
     private static readonly int MaxRetryAttempts = 3;
     private static readonly int DelayBetweenRetries = 2000; // in milliseconds
 
-    public static void ExecuteWithRetry(Action<DbConnection> dbOperation)
+    public static async Task<T> ExecuteWithRetryAsync<T>(Func<DbConnection, Task<T>> dbOperation)
     {
         int attempt = 0;
         bool success = false;
@@ -18,9 +19,10 @@ public class DatabaseHelper
             {
                 using (var connection = dbprovider.CreateConnection())
                 {
-                    connection.Open();
-                    dbOperation(connection);
-                    success = true; // If we reach here, the operation was successful
+                    await connection.OpenAsync();
+                    T result = await dbOperation(connection);
+                    success = true;
+                    return result; // If we reach here, the operation was successful
                 }
             }
             catch (Exception ex)
@@ -34,9 +36,11 @@ public class DatabaseHelper
                 else
                 {
                     Console.WriteLine($"Operation failed. Attempt {attempt} of {MaxRetryAttempts}. Retrying in {DelayBetweenRetries / 1000} seconds...");
-                    Thread.Sleep(DelayBetweenRetries);
+                    await Task.Delay(DelayBetweenRetries);
                 }
             }
         }
+
+        throw new InvalidOperationException("Unexpected exit from retry loop.");
     }
 }
