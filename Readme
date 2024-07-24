@@ -1,76 +1,42 @@
 using System;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using System.Linq;
-using System.Text.Json;
+using System.Data.Common;
+using System.Threading;
 
-public class GenericHttpClient : IGenericHttpClient
+public class DatabaseHelper
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private static readonly int MaxRetryAttempts = 3;
+    private static readonly int DelayBetweenRetries = 2000; // in milliseconds
 
-    public GenericHttpClient(IHttpClientFactory httpClientFactory, IHttpContextAccessor httpContextAccessor)
+    public static void ExecuteWithRetry(Action<DbConnection> dbOperation)
     {
-        _httpClientFactory = httpClientFactory;
-        _httpContextAccessor = httpContextAccessor;
-    }
+        int attempt = 0;
+        bool success = false;
 
-    public async Task<ApiResponse<T>> GetAsync<T>(string baseUrl, string endpoint)
-    {
-        var client = _httpClientFactory.CreateClient();
-
-        // Set the base address
-        client.BaseAddress = new Uri(baseUrl);
-
-        // Get the UserId from the current HTTP context
-        var userId = _httpContextAccessor.HttpContext?.Request.Headers["UserId"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(userId))
-        {
-            if (client.DefaultRequestHeaders.Contains("UserId"))
-            {
-                client.DefaultRequestHeaders.Remove("UserId");
-            }
-            client.DefaultRequestHeaders.Add("UserId", userId);
-        }
-
-        return await RetryPolicy(async () =>
-        {
-            var response = await client.GetAsync(endpoint);
-            var apiResponse = new ApiResponse<T>
-            {
-                StatusCode = (int)response.StatusCode,
-                Success = response.IsSuccessStatusCode
-            };
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseData = await response.Content.ReadAsStringAsync();
-                apiResponse.Data = JsonSerializer.Deserialize<T>(responseData);
-            }
-            else
-            {
-                apiResponse.ErrorMessage = response.ReasonPhrase;
-            }
-
-            return apiResponse;
-        }, 3, TimeSpan.FromSeconds(2));
-    }
-
-    private async Task<T> RetryPolicy<T>(Func<Task<T>> action, int retryCount, TimeSpan delay)
-    {
-        for (int i = 0; i < retryCount; i++)
+        while (attempt < MaxRetryAttempts && !success)
         {
             try
             {
-                return await action();
+                using (var connection = dbprovider.CreateConnection())
+                {
+                    connection.Open();
+                    dbOperation(connection);
+                    success = true; // If we reach here, the operation was successful
+                }
             }
-            catch (HttpRequestException) when (i < retryCount - 1)
+            catch (Exception ex)
             {
-                await Task.Delay(delay);
+                attempt++;
+                if (attempt >= MaxRetryAttempts)
+                {
+                    Console.WriteLine("Failed to complete the operation after multiple attempts.");
+                    throw;
+                }
+                else
+                {
+                    Console.WriteLine($"Operation failed. Attempt {attempt} of {MaxRetryAttempts}. Retrying in {DelayBetweenRetries / 1000} seconds...");
+                    Thread.Sleep(DelayBetweenRetries);
+                }
             }
         }
-        // Re-throw the last exception if all retries fail
-        return await action();
     }
 }
