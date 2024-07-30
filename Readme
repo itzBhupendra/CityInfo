@@ -1,46 +1,40 @@
-using System;
-using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
+var builder = WebApplication.CreateBuilder(args);
 
-public class DatabaseHelper
+// Add services to the container.
+builder.Services.AddControllers();
+builder.Services.AddAuthentication(options =>
 {
-    private static readonly int MaxRetryAttempts = 3;
-    private static readonly int DelayBetweenRetries = 2000; // in milliseconds
-
-    public static async Task<T> ExecuteWithRetryAsync<T>(Func<DbConnection, Task<T>> dbOperation)
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        int attempt = 0;
-        bool success = false;
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+    };
+});
 
-        while (attempt < MaxRetryAttempts && !success)
-        {
-            try
-            {
-                using (var connection = dbprovider.CreateConnection())
-                {
-                    await connection.OpenAsync();
-                    T result = await dbOperation(connection);
-                    success = true;
-                    return result; // If we reach here, the operation was successful
-                }
-            }
-            catch (Exception ex)
-            {
-                attempt++;
-                if (attempt >= MaxRetryAttempts)
-                {
-                    Console.WriteLine("Failed to complete the operation after multiple attempts.");
-                    throw;
-                }
-                else
-                {
-                    Console.WriteLine($"Operation failed. Attempt {attempt} of {MaxRetryAttempts}. Retrying in {DelayBetweenRetries / 1000} seconds...");
-                    await Task.Delay(DelayBetweenRetries);
-                }
-            }
-        }
+builder.Services.AddAuthorization();
 
-        throw new InvalidOperationException("Unexpected exit from retry loop.");
-    }
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
 }
+
+app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
