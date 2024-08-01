@@ -1,40 +1,15 @@
-var builder = WebApplication.CreateBuilder(args);
+    Public Function DeserializeJson(Of T)(jsonString As String) As T
+        ' Create an instance of the DataContractJsonSerializer
+        Dim serializer As New DataContractJsonSerializer(GetType(T))
 
-// Add services to the container.
-builder.Services.AddControllers();
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
-    };
-});
+        ' Convert the JSON string to a byte array
+        Dim byteArray As Byte() = Encoding.UTF8.GetBytes(jsonString)
 
-builder.Services.AddAuthorization();
+        ' Deserialize the JSON string
+        Dim result As T
+        Using stream As New MemoryStream(byteArray)
+            result = CType(serializer.ReadObject(stream), T)
+        End Using
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-}
-
-app.UseHttpsRedirection();
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
+        Return result
+    End Function
