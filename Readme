@@ -1,15 +1,71 @@
-    Public Function DeserializeJson(Of T)(jsonString As String) As T
-        ' Create an instance of the DataContractJsonSerializer
-        Dim serializer As New DataContractJsonSerializer(GetType(T))
+pipeline {
+    agent any
 
-        ' Convert the JSON string to a byte array
-        Dim byteArray As Byte() = Encoding.UTF8.GetBytes(jsonString)
+    environment {
+        // Define your Artifactory server and credentials here
+        ARTIFACTORY_SERVER = 'http://your-artifactory-server/artifactory'
+        ARTIFACTORY_CREDENTIALS_ID = 'your-artifactory-credentials-id'
+    }
 
-        ' Deserialize the JSON string
-        Dim result As T
-        Using stream As New MemoryStream(byteArray)
-            result = CType(serializer.ReadObject(stream), T)
-        End Using
-
-        Return result
-    End Function
+    stages {
+        stage('Find Certificate') {
+            steps {
+                script {
+                    // Define the directory where the certificate is located
+                    def certDir = 'path/to/certificates'
+                    
+                    // Find the certificate file (assuming only one file matches the pattern)
+                    def certFiles = sh(script: "ls ${certDir}/*.crt", returnStdout: true).trim().split('\n')
+                    
+                    if (certFiles.size() == 0) {
+                        error "No certificate file found in ${certDir}"
+                    }
+                    
+                    // Assume there's only one certificate file
+                    env.CERT_FILE_PATH = certFiles[0]
+                }
+            }
+        }
+        
+        stage('Zip Certificate') {
+            steps {
+                script {
+                    // Define the zip file path
+                    def zipFilePath = 'path/to/your/certificate.zip'
+                    
+                    // Zip the certificate file
+                    sh "zip -j ${zipFilePath} ${env.CERT_FILE_PATH}"
+                }
+            }
+        }
+        
+        stage('Upload to Artifactory') {
+            steps {
+                script {
+                    // Define the Artifactory upload path
+                    def artifactoryUploadPath = 'your-repo/certificates/certificate.zip'
+                    
+                    // Use the Artifactory plugin to upload the zipped file
+                    def server = Artifactory.server(ARTIFACTORY_SERVER)
+                    def uploadSpec = """{
+                        "files": [
+                            {
+                                "pattern": "${zipFilePath}",
+                                "target": "${artifactoryUploadPath}"
+                            }
+                        ]
+                    }"""
+                    
+                    server.upload(uploadSpec)
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Cleanup: delete the zipped file after upload
+            sh "rm -f path/to/your/certificate.zip"
+        }
+    }
+}
