@@ -1,71 +1,78 @@
 using System;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 class Program
 {
     static void Main(string[] args)
     {
-        // Define the locations to search for certificates
+        // Specify the certificate subject name you're looking for
+        string certName = "Your Certificate Name";  // Update this to the certificate's common name
+
+        // Define the store locations to search for the certificate
         StoreLocation[] storeLocations = { StoreLocation.CurrentUser, StoreLocation.LocalMachine };
 
-        // Define the store names to search in
-        StoreName[] storeNames = {
-            StoreName.My,          // Personal certificates
-            StoreName.Root,        // Trusted root certificates
-            StoreName.AuthRoot,    // Third-party trusted root certificates
-            StoreName.CertificateAuthority, // Intermediate certificates
-            StoreName.TrustedPeople,
-            StoreName.TrustedPublisher,
-            StoreName.AddressBook
-        };
+        // Define the store name to search in (typically 'My' for personal certificates)
+        StoreName storeName = StoreName.My;
 
-        // Iterate through each store location
         foreach (var storeLocation in storeLocations)
         {
-            Console.WriteLine($"Store Location: {storeLocation}");
-
-            // Iterate through each store name
-            foreach (var storeName in storeNames)
+            using (X509Store store = new X509Store(storeName, storeLocation))
             {
-                Console.WriteLine($"\nStore Name: {storeName}");
-
-                // Open the store
-                using (X509Store store = new X509Store(storeName, storeLocation))
+                try
                 {
-                    try
+                    store.Open(OpenFlags.ReadOnly);
+
+                    // Find the certificate by its name
+                    X509Certificate2Collection certCollection = store.Certificates.Find(
+                        X509FindType.FindBySubjectName, certName, validOnly: false);
+
+                    // Check if any certificates were found
+                    if (certCollection.Count > 0)
                     {
-                        store.Open(OpenFlags.ReadOnly); // Open in read-only mode
+                        // Get the first matching certificate
+                        X509Certificate2 cert = certCollection[0];
 
-                        // Retrieve all certificates in the store
-                        X509Certificate2Collection certificates = store.Certificates;
+                        Console.WriteLine("Certificate found:");
+                        Console.WriteLine("  Subject: " + cert.Subject);
+                        Console.WriteLine("  Issuer: " + cert.Issuer);
+                        Console.WriteLine("  Thumbprint: " + cert.Thumbprint);
 
-                        // Check if there are any certificates
-                        if (certificates.Count > 0)
+                        // Check if the certificate has a private key
+                        if (cert.HasPrivateKey)
                         {
-                            // Iterate through and display certificate details
-                            foreach (X509Certificate2 cert in certificates)
+                            // Extract the private key
+                            RSA rsaPrivateKey = cert.GetRSAPrivateKey();
+
+                            if (rsaPrivateKey != null)
                             {
-                                Console.WriteLine($"  Subject: {cert.Subject}");
-                                Console.WriteLine($"  Issuer: {cert.Issuer}");
-                                Console.WriteLine($"  Thumbprint: {cert.Thumbprint}");
-                                Console.WriteLine($"  Valid From: {cert.NotBefore}");
-                                Console.WriteLine($"  Valid To: {cert.NotAfter}");
-                                Console.WriteLine();
+                                // Export the private key to XML format (true for including private parameters)
+                                string privateKeyXml = rsaPrivateKey.ToXmlString(true);
+                                Console.WriteLine("Private Key XML:");
+                                Console.WriteLine(privateKeyXml);
+                            }
+                            else
+                            {
+                                Console.WriteLine("RSA Private Key is null.");
                             }
                         }
                         else
                         {
-                            Console.WriteLine("  No certificates found.");
+                            Console.WriteLine("Certificate does not have a private key.");
                         }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Console.WriteLine($"  Error accessing store {storeName} at {storeLocation}: {ex.Message}");
+                        Console.WriteLine($"No certificate found with the name: {certName}");
                     }
-                    finally
-                    {
-                        store.Close(); // Close the store after use
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error accessing store: {ex.Message}");
+                }
+                finally
+                {
+                    store.Close();
                 }
             }
         }
