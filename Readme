@@ -1,80 +1,37 @@
-using System;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 
-class Program
+public class AuthCacheFilter : ActionFilterAttribute
 {
-    static void Main(string[] args)
+    private readonly AuthService _authService;
+
+    public AuthCacheFilter(AuthService authService)
     {
-        // Specify the certificate subject name you're looking for
-        string certName = "Your Certificate Name";  // Update this to the certificate's common name
+        _authService = authService;
+    }
 
-        // Define the store locations to search for the certificate
-        StoreLocation[] storeLocations = { StoreLocation.CurrentUser, StoreLocation.LocalMachine };
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        // Assuming UserID is passed in a header (or query string/body)
+        var userId = context.HttpContext.Request.Headers["UserID"].FirstOrDefault();
 
-        // Define the store name to search in (typically 'My' for personal certificates)
-        StoreName storeName = StoreName.My;
-
-        foreach (var storeLocation in storeLocations)
+        if (string.IsNullOrEmpty(userId))
         {
-            using (X509Store store = new X509Store(storeName, storeLocation))
-            {
-                try
-                {
-                    store.Open(OpenFlags.ReadOnly);
-
-                    // Find the certificate by its name
-                    X509Certificate2Collection certCollection = store.Certificates.Find(
-                        X509FindType.FindBySubjectName, certName, validOnly: false);
-
-                    // Check if any certificates were found
-                    if (certCollection.Count > 0)
-                    {
-                        // Get the first matching certificate
-                        X509Certificate2 cert = certCollection[0];
-
-                        Console.WriteLine("Certificate found:");
-                        Console.WriteLine("  Subject: " + cert.Subject);
-                        Console.WriteLine("  Issuer: " + cert.Issuer);
-                        Console.WriteLine("  Thumbprint: " + cert.Thumbprint);
-
-                        // Check if the certificate has a private key
-                        if (cert.HasPrivateKey)
-                        {
-                            // Extract the private key
-                            RSA rsaPrivateKey = cert.GetRSAPrivateKey();
-
-                            if (rsaPrivateKey != null)
-                            {
-                                // Export the private key to XML format (true for including private parameters)
-                                string privateKeyXml = rsaPrivateKey.ToXmlString(true);
-                                Console.WriteLine("Private Key XML:");
-                                Console.WriteLine(privateKeyXml);
-                            }
-                            else
-                            {
-                                Console.WriteLine("RSA Private Key is null.");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("Certificate does not have a private key.");
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine($"No certificate found with the name: {certName}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error accessing store: {ex.Message}");
-                }
-                finally
-                {
-                    store.Close();
-                }
-            }
+            // UserID is missing, return unauthorized
+            context.Result = new UnauthorizedResult();
+            return;
         }
+
+        // Use the AuthService to authenticate and cache the user
+        bool isAuthenticated = _authService.AuthenticateAndCacheUser(userId);
+
+        if (!isAuthenticated)
+        {
+            // Authentication failed
+            context.Result = new UnauthorizedResult();
+        }
+
+        // If authentication succeeds, proceed to the action
+        base.OnActionExecuting(context);
     }
 }
