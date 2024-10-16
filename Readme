@@ -1,37 +1,47 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
+SELECT 
+    policy,
 
-public class AuthCacheFilter : ActionFilterAttribute
-{
-    private readonly AuthService _authService;
+    -- Min Date
+    CASE 
+        WHEN extradate1 <= extradate2 AND extradate1 <= extradate3 THEN extradate1
+        WHEN extradate2 <= extradate1 AND extradate2 <= extradate3 THEN extradate2
+        ELSE extradate3
+    END AS min_date,
 
-    public AuthCacheFilter(AuthService authService)
-    {
-        _authService = authService;
-    }
+    -- Mid Date
+    CASE
+        WHEN (extradate1 <= extradate2 AND extradate1 >= extradate3) OR (extradate1 >= extradate2 AND extradate1 <= extradate3) THEN extradate1
+        WHEN (extradate2 <= extradate1 AND extradate2 >= extradate3) OR (extradate2 >= extradate1 AND extradate2 <= extradate3) THEN extradate2
+        ELSE extradate3
+    END AS mid_date,
 
-    public override void OnActionExecuting(ActionExecutingContext context)
-    {
-        // Assuming UserID is passed in a header (or query string/body)
-        var userId = context.HttpContext.Request.Headers["UserID"].FirstOrDefault();
+    -- Max Date
+    CASE 
+        WHEN extradate1 >= extradate2 AND extradate1 >= extradate3 THEN extradate1
+        WHEN extradate2 >= extradate1 AND extradate2 >= extradate3 THEN extradate2
+        ELSE extradate3
+    END AS max_date,
 
-        if (string.IsNullOrEmpty(userId))
-        {
-            // UserID is missing, return unauthorized
-            context.Result = new UnauthorizedResult();
-            return;
-        }
+    -- Min Amount corresponding to Min Date
+    CASE 
+        WHEN extradate1 <= extradate2 AND extradate1 <= extradate3 THEN extraamount1
+        WHEN extradate2 <= extradate1 AND extradate2 <= extradate3 THEN extraamount2
+        ELSE extraamount3
+    END AS min_amount,
 
-        // Use the AuthService to authenticate and cache the user
-        bool isAuthenticated = _authService.AuthenticateAndCacheUser(userId);
+    -- Mid Amount corresponding to Mid Date
+    CASE
+        WHEN (extradate1 <= extradate2 AND extradate1 >= extradate3) OR (extradate1 >= extradate2 AND extradate1 <= extradate3) THEN extraamount1
+        WHEN (extradate2 <= extradate1 AND extradate2 >= extradate3) OR (extradate2 >= extradate1 AND extradate2 <= extradate3) THEN extraamount2
+        ELSE extraamount3
+    END AS mid_amount,
 
-        if (!isAuthenticated)
-        {
-            // Authentication failed
-            context.Result = new UnauthorizedResult();
-        }
+    -- Max Amount corresponding to Max Date
+    CASE 
+        WHEN extradate1 >= extradate2 AND extradate1 >= extradate3 THEN extraamount1
+        WHEN extradate2 >= extradate1 AND extradate2 >= extradate3 THEN extraamount2
+        ELSE extraamount3
+    END AS max_amount
 
-        // If authentication succeeds, proceed to the action
-        base.OnActionExecuting(context);
-    }
-}
+FROM your_table
+WHERE policy = 'your_policy_number';
