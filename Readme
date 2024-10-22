@@ -1,47 +1,45 @@
-SELECT 
-    policy,
+[HttpGet("aggregate-logs/{correlationId}")]
+public async Task<IActionResult> GetLogsFromAllServers(string correlationId)
+{
+    var currentServerLogs = GetLogsByCorrelationIdLocal(correlationId); // Call to local logs
 
-    -- Min Date
-    CASE 
-        WHEN extradate1 <= extradate2 AND extradate1 <= extradate3 THEN extradate1
-        WHEN extradate2 <= extradate1 AND extradate2 <= extradate3 THEN extradate2
-        ELSE extradate3
-    END AS min_date,
+    var otherServerUrls = new List<string>
+    {
+        "http://server1/api/logs/",
+        "http://server2/api/logs/",
+        "http://server3/api/logs/"
+    };
 
-    -- Mid Date
-    CASE
-        WHEN (extradate1 <= extradate2 AND extradate1 >= extradate3) OR (extradate1 >= extradate2 AND extradate1 <= extradate3) THEN extradate1
-        WHEN (extradate2 <= extradate1 AND extradate2 >= extradate3) OR (extradate2 >= extradate1 AND extradate2 <= extradate3) THEN extradate2
-        ELSE extradate3
-    END AS mid_date,
+    // Remove the URL for the current server to avoid calling itself
+    otherServerUrls.Remove($"http://{Request.Host}/api/logs/");
 
-    -- Max Date
-    CASE 
-        WHEN extradate1 >= extradate2 AND extradate1 >= extradate3 THEN extradate1
-        WHEN extradate2 >= extradate1 AND extradate2 >= extradate3 THEN extradate2
-        ELSE extradate3
-    END AS max_date,
+    var logEntries = new List<string>();
 
-    -- Min Amount corresponding to Min Date
-    CASE 
-        WHEN extradate1 <= extradate2 AND extradate1 <= extradate3 THEN extraamount1
-        WHEN extradate2 <= extradate1 AND extradate2 <= extradate3 THEN extraamount2
-        ELSE extraamount3
-    END AS min_amount,
+    // Add local logs
+    logEntries.AddRange(currentServerLogs);
 
-    -- Mid Amount corresponding to Mid Date
-    CASE
-        WHEN (extradate1 <= extradate2 AND extradate1 >= extradate3) OR (extradate1 >= extradate2 AND extradate1 <= extradate3) THEN extraamount1
-        WHEN (extradate2 <= extradate1 AND extradate2 >= extradate3) OR (extradate2 >= extradate1 AND extradate2 <= extradate3) THEN extraamount2
-        ELSE extraamount3
-    END AS mid_amount,
+    using (var httpClient = new HttpClient())
+    {
+        // Fetch logs from the other servers
+        var tasks = otherServerUrls.Select(async url =>
+        {
+            var response = await httpClient.GetAsync($"{url}{correlationId}");
+            if (response.IsSuccessStatusCode)
+            {
+                var logs = await response.Content.ReadAsAsync<IEnumerable<string>>();
+                logEntries.AddRange(logs);
+            }
+        });
 
-    -- Max Amount corresponding to Max Date
-    CASE 
-        WHEN extradate1 >= extradate2 AND extradate1 >= extradate3 THEN extraamount1
-        WHEN extradate2 >= extradate1 AND extradate2 >= extradate3 THEN extraamount2
-        ELSE extraamount3
-    END AS max_amount
+        await Task.WhenAll(tasks); // Wait for all tasks to complete
+    }
 
-FROM your_table
-WHERE policy = 'your_policy_number';
+    return Ok(logEntries);
+}
+
+private IEnumerable<string> GetLogsByCorrelationIdLocal(string correlationId)
+{
+    var logFilePath = "path_to_log_file";  // Local log file location
+    return System.IO.File.ReadLines(logFilePath)
+        .Where(line => line.Contains(correlationId));
+}
