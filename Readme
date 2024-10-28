@@ -1,45 +1,78 @@
-[HttpGet("aggregate-logs/{correlationId}")]
-public async Task<IActionResult> GetLogsFromAllServers(string correlationId)
-{
-    var currentServerLogs = GetLogsByCorrelationIdLocal(correlationId); // Call to local logs
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { CircularProgress, Container, Typography } from '@mui/material';
 
-    var otherServerUrls = new List<string>
-    {
-        "http://server1/api/logs/",
-        "http://server2/api/logs/",
-        "http://server3/api/logs/"
-    };
+interface LogModel {
+  AppName: string;
+  CorrelationId: string;
+  LogDateTime: string;  // ISO format assumed
+  LogLevel: string;
+  Message: string;
+}
 
-    // Remove the URL for the current server to avoid calling itself
-    otherServerUrls.Remove($"http://{Request.Host}/api/logs/");
+// URLs of the three servers
+const serverUrls = [
+  'https://server1.example.com/api/logs',
+  'https://server2.example.com/api/logs',
+  'https://server3.example.com/api/logs',
+];
 
-    var logEntries = new List<string>();
+const LogDashboard: React.FC = () => {
+  const [logs, setLogs] = useState<LogModel[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    // Add local logs
-    logEntries.AddRange(currentServerLogs);
+  // Fetch logs from all servers
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const responses = await Promise.all(serverUrls.map(url => axios.get<LogModel[]>(url)));
+      
+      // Combine all logs from each server's response
+      const allLogs = responses.flatMap(response => response.data);
+      
+      // Sort logs by LogDateTime in descending order
+      allLogs.sort((a, b) => new Date(b.LogDateTime).getTime() - new Date(a.LogDateTime).getTime());
 
-    using (var httpClient = new HttpClient())
-    {
-        // Fetch logs from the other servers
-        var tasks = otherServerUrls.Select(async url =>
-        {
-            var response = await httpClient.GetAsync($"{url}{correlationId}");
-            if (response.IsSuccessStatusCode)
-            {
-                var logs = await response.Content.ReadAsAsync<IEnumerable<string>>();
-                logEntries.AddRange(logs);
-            }
-        });
-
-        await Task.WhenAll(tasks); // Wait for all tasks to complete
+      setLogs(allLogs);
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return Ok(logEntries);
-}
+  useEffect(() => {
+    fetchLogs();
+  }, []);
 
-private IEnumerable<string> GetLogsByCorrelationIdLocal(string correlationId)
-{
-    var logFilePath = "path_to_log_file";  // Local log file location
-    return System.IO.File.ReadLines(logFilePath)
-        .Where(line => line.Contains(correlationId));
-}
+  // Define columns for the DataGrid
+  const columns: GridColDef[] = [
+    { field: 'AppName', headerName: 'App Name', width: 150 },
+    { field: 'CorrelationId', headerName: 'Correlation ID', width: 200 },
+    { field: 'LogDateTime', headerName: 'Date/Time', width: 180 },
+    { field: 'LogLevel', headerName: 'Log Level', width: 120 },
+    { field: 'Message', headerName: 'Message', width: 300 },
+  ];
+
+  return (
+    <Container>
+      <Typography variant="h4" gutterBottom>
+        Log Dashboard
+      </Typography>
+      
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <DataGrid
+          rows={logs.map((log, index) => ({ id: index, ...log }))}
+          columns={columns}
+          pageSize={10}
+          autoHeight
+        />
+      )}
+    </Container>
+  );
+};
+
+export default LogDashboard;
