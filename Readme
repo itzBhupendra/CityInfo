@@ -1,46 +1,40 @@
-# login.py
+# read_credentials.py
 from cryptography.fernet import Fernet
 import settings
 import os
 
-# Generate a secret key (only for the first time, store securely)
-def generate_key():
-    return Fernet.generate_key()
+# Load the key from the key file
+def load_key():
+    if os.path.exists("key.key"):
+        with open("key.key", "rb") as key_file:
+            return key_file.read()
+    else:
+        raise FileNotFoundError("Encryption key not found. Please ensure login.py has been run to generate credentials.")
 
-# Encrypt the credentials
-def encrypt_credentials(key, username, password):
+# Decrypt credentials and return as strings
+def decrypt_credentials(key, encrypted_username, encrypted_password):
     cipher = Fernet(key)
-    encrypted_username = cipher.encrypt(username.encode())
-    encrypted_password = cipher.encrypt(password.encode())
-    return encrypted_username, encrypted_password
+    username = cipher.decrypt(encrypted_username).decode("utf-8")  # Decode to string
+    password = cipher.decrypt(encrypted_password).decode("utf-8")  # Decode to string
+    return username, password
 
-# Save the credentials to settings.py
-def save_credentials_to_settings(encrypted_username, encrypted_password):
-    with open("settings.py", "r") as file:
-        lines = file.readlines()
+def get_decrypted_credentials():
+    if settings.encrypted_username is None or settings.encrypted_password is None:
+        print("No saved credentials found in settings.py.")
+        return None, None
 
-    with open("settings.py", "w") as file:
-        for line in lines:
-            if line.startswith("encrypted_username"):
-                file.write(f"encrypted_username = {encrypted_username}\n")
-            elif line.startswith("encrypted_password"):
-                file.write(f"encrypted_password = {encrypted_password}\n")
-            else:
-                file.write(line)
-
-# Login function
-def login():
-    username = input("Enter username: ")
-    password = input("Enter password: ")
-
-    if settings.key is None:
-        print("No encryption key found. Generating a new one...")
-        settings.key = generate_key()
-
-    encrypted_username, encrypted_password = encrypt_credentials(settings.key, username, password)
-    save_credentials_to_settings(encrypted_username, encrypted_password)
-
-    print("Login successful. Credentials saved in encrypted form.")
+    try:
+        key = load_key()
+        username, password = decrypt_credentials(key, settings.encrypted_username, settings.encrypted_password)
+        return username, password  # Returns both as strings
+    except Exception as e:
+        print("Error decrypting credentials:", str(e))
+        return None, None
 
 if __name__ == "__main__":
-    login()
+    username, password = get_decrypted_credentials()
+    if username and password:
+        print(f"Decrypted Username: {username}")
+        print(f"Decrypted Password: {password}")
+    else:
+        print("Failed to retrieve credentials.")
