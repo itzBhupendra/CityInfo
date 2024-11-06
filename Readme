@@ -1,40 +1,28 @@
-# read_credentials.py
-from cryptography.fernet import Fernet
-import settings
-import os
+using System;
+using System.Net.WebSockets;
+using System.Threading;
+using System.Threading.Tasks;
 
-# Load the key from the key file
-def load_key():
-    if os.path.exists("key.key"):
-        with open("key.key", "rb") as key_file:
-            return key_file.read()
-    else:
-        raise FileNotFoundError("Encryption key not found. Please ensure login.py has been run to generate credentials.")
+public async Task SendBinaryDataAsync(byte[] data)
+{
+    using (ClientWebSocket webSocket = new ClientWebSocket())
+    {
+        await webSocket.ConnectAsync(new Uri("wss://yourserver.com/socket"), CancellationToken.None);
 
-# Decrypt credentials and return as strings
-def decrypt_credentials(key, encrypted_username, encrypted_password):
-    cipher = Fernet(key)
-    username = cipher.decrypt(encrypted_username).decode("utf-8")  # Decode to string
-    password = cipher.decrypt(encrypted_password).decode("utf-8")  # Decode to string
-    return username, password
+        await webSocket.SendAsync(
+            new ArraySegment<byte>(data),
+            WebSocketMessageType.Binary,
+            true,
+            CancellationToken.None
+        );
 
-def get_decrypted_credentials():
-    if settings.encrypted_username is None or settings.encrypted_password is None:
-        print("No saved credentials found in settings.py.")
-        return None, None
+        // Optionally, receive a response
+        byte[] receiveBuffer = new byte[1024];
+        var result = await webSocket.ReceiveAsync(
+            new ArraySegment<byte>(receiveBuffer),
+            CancellationToken.None
+        );
 
-    try:
-        key = load_key()
-        username, password = decrypt_credentials(key, settings.encrypted_username, settings.encrypted_password)
-        return username, password  # Returns both as strings
-    except Exception as e:
-        print("Error decrypting credentials:", str(e))
-        return None, None
-
-if __name__ == "__main__":
-    username, password = get_decrypted_credentials()
-    if username and password:
-        print(f"Decrypted Username: {username}")
-        print(f"Decrypted Password: {password}")
-    else:
-        print("Failed to retrieve credentials.")
+        Console.WriteLine($"Received: {BitConverter.ToString(receiveBuffer, 0, result.Count)}");
+    }
+}
