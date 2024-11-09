@@ -6,6 +6,6 @@ SET
     target.Column2 = source.Column2,
     -- Add other columns as needed
     target.LastUpdated = GETDATE()
-FROM ProdDB.dbo.YourTable AS target
-JOIN BackupDB.dbo.YourTable AS source
+FROM ProdDB.dbo.Val AS target
+JOIN RepDB.dbo.Val AS source
 ON target.Id = source.Id;
