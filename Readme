@@ -1,28 +1,11 @@
-using System;
-using System.Net.WebSockets;
-using System.Threading;
-using System.Threading.Tasks;
+USE ProdDB;
 
-public async Task SendBinaryDataAsync(byte[] data)
-{
-    using (ClientWebSocket webSocket = new ClientWebSocket())
-    {
-        await webSocket.ConnectAsync(new Uri("wss://yourserver.com/socket"), CancellationToken.None);
-
-        await webSocket.SendAsync(
-            new ArraySegment<byte>(data),
-            WebSocketMessageType.Binary,
-            true,
-            CancellationToken.None
-        );
-
-        // Optionally, receive a response
-        byte[] receiveBuffer = new byte[1024];
-        var result = await webSocket.ReceiveAsync(
-            new ArraySegment<byte>(receiveBuffer),
-            CancellationToken.None
-        );
-
-        Console.WriteLine($"Received: {BitConverter.ToString(receiveBuffer, 0, result.Count)}");
-    }
-}
+UPDATE target
+SET 
+    target.Column1 = source.Column1,
+    target.Column2 = source.Column2,
+    -- Add other columns as needed
+    target.LastUpdated = GETDATE()
+FROM ProdDB.dbo.YourTable AS target
+JOIN BackupDB.dbo.YourTable AS source
+ON target.Id = source.Id;
