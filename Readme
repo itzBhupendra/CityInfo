@@ -1,11 +1,150 @@
-USE ProdDB;
+namespace WCFClientAppWinForms
+{
+    partial class Form1
+    {
+        private System.ComponentModel.IContainer components = null;
+        private System.Windows.Forms.TextBox txtServiceUrl;
+        private System.Windows.Forms.TextBox txtSPN;
+        private System.Windows.Forms.Button btnConnect;
+        private System.Windows.Forms.Label lblResult;
 
-UPDATE target
-SET 
-    target.Column1 = source.Column1,
-    target.Column2 = source.Column2,
-    -- Add other columns as needed
-    target.LastUpdated = GETDATE()
-FROM ProdDB.dbo.Val AS target
-JOIN RepDB.dbo.Val AS source
-ON target.Id = source.Id;
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        private void InitializeComponent()
+        {
+            this.txtServiceUrl = new System.Windows.Forms.TextBox();
+            this.txtSPN = new System.Windows.Forms.TextBox();
+            this.btnConnect = new System.Windows.Forms.Button();
+            this.lblResult = new System.Windows.Forms.Label();
+            this.SuspendLayout();
+            // 
+            // txtServiceUrl
+            // 
+            this.txtServiceUrl.Location = new System.Drawing.Point(13, 13);
+            this.txtServiceUrl.Name = "txtServiceUrl";
+            this.txtServiceUrl.Size = new System.Drawing.Size(259, 20);
+            this.txtServiceUrl.TabIndex = 0;
+            this.txtServiceUrl.Text = "net.tcp://appserver:8080/Service";
+            // 
+            // txtSPN
+            // 
+            this.txtSPN.Location = new System.Drawing.Point(13, 40);
+            this.txtSPN.Name = "txtSPN";
+            this.txtSPN.Size = new System.Drawing.Size(259, 20);
+            this.txtSPN.TabIndex = 1;
+            this.txtSPN.Text = "HOST/appserver";
+            // 
+            // btnConnect
+            // 
+            this.btnConnect.Location = new System.Drawing.Point(13, 67);
+            this.btnConnect.Name = "btnConnect";
+            this.btnConnect.Size = new System.Drawing.Size(75, 23);
+            this.btnConnect.TabIndex = 2;
+            this.btnConnect.Text = "Connect";
+            this.btnConnect.UseVisualStyleBackColor = true;
+            this.btnConnect.Click += new System.EventHandler(this.btnConnect_Click);
+            // 
+            // lblResult
+            // 
+            this.lblResult.Location = new System.Drawing.Point(13, 97);
+            this.lblResult.Name = "lblResult";
+            this.lblResult.Size = new System.Drawing.Size(259, 23);
+            this.lblResult.TabIndex = 3;
+            this.lblResult.Text = "Result will appear here";
+            // 
+            // Form1
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 131);
+            this.Controls.Add(this.lblResult);
+            this.Controls.Add(this.btnConnect);
+            this.Controls.Add(this.txtSPN);
+            this.Controls.Add(this.txtServiceUrl);
+            this.Name = "Form1";
+            this.Text = "WCF Client";
+            this.ResumeLayout(false);
+            this.PerformLayout();
+        }
+    }
+}
+
+
+
+
+
+using System;
+using System.ServiceModel;
+using System.Windows.Forms;
+
+namespace WCFClientAppWinForms
+{
+    public partial class Form1 : Form
+    {
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void btnConnect_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Retrieve values from the textboxes
+                string serviceUrl = txtServiceUrl.Text;
+                string spn = txtSPN.Text;
+
+                // Create a binding to match the one in app.config
+                var binding = new NetTcpBinding(SecurityMode.Transport)
+                {
+                    Security = 
+                    {
+                        Transport = { ClientCredentialType = TcpClientCredentialType.Windows }
+                    }
+                };
+
+                // Set the address of the service
+                var address = new EndpointAddress(serviceUrl);
+
+                // Create a channel factory for the IService contract
+                var channelFactory = new ChannelFactory<IService>(binding, address);
+
+                // Set the credentials to use Windows authentication
+                channelFactory.Credentials.Windows.ClientCredential = System.Net.CredentialCache.DefaultNetworkCredentials;
+
+                // Set the identity to use the specified SPN
+                channelFactory.Endpoint.Address = new EndpointAddress(serviceUrl);
+                channelFactory.Endpoint.Identity = new EndpointIdentity(spn);
+
+                // Create a proxy to the service
+                IService client = channelFactory.CreateChannel();
+
+                // Call the service method
+                string result = client.GetData(123);
+
+                // Display the result in the label
+                lblResult.Text = "Service Response: " + result;
+
+                // Close the channel
+                ((IClientChannel)client).Close();
+            }
+            catch (Exception ex)
+            {
+                lblResult.Text = "Error: " + ex.Message;
+            }
+        }
+    }
+
+    // Define the contract (same as the WCF service)
+    [ServiceContract]
+    public interface IService
+    {
+        [OperationContract]
+        string GetData(int value);
+    }
+}
