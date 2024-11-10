@@ -148,3 +148,8 @@ namespace WCFClientAppWinForms
         string GetData(int value);
     }
 }
+
+
+dotnet add package System.ServiceModel.Duplex --version 4.9.0
+dotnet add package System.ServiceModel.Http --version 4.9.0
+dotnet add package System.ServiceModel.NetTcp --version 4.9.0
