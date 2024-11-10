@@ -1,86 +1,7 @@
-namespace WCFClientAppWinForms
-{
-    partial class Form1
-    {
-        private System.ComponentModel.IContainer components = null;
-        private System.Windows.Forms.TextBox txtServiceUrl;
-        private System.Windows.Forms.TextBox txtSPN;
-        private System.Windows.Forms.Button btnConnect;
-        private System.Windows.Forms.Label lblResult;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null))
-            {
-                components.Dispose();
-            }
-            base.Dispose(disposing);
-        }
-
-        private void InitializeComponent()
-        {
-            this.txtServiceUrl = new System.Windows.Forms.TextBox();
-            this.txtSPN = new System.Windows.Forms.TextBox();
-            this.btnConnect = new System.Windows.Forms.Button();
-            this.lblResult = new System.Windows.Forms.Label();
-            this.SuspendLayout();
-            // 
-            // txtServiceUrl
-            // 
-            this.txtServiceUrl.Location = new System.Drawing.Point(13, 13);
-            this.txtServiceUrl.Name = "txtServiceUrl";
-            this.txtServiceUrl.Size = new System.Drawing.Size(259, 20);
-            this.txtServiceUrl.TabIndex = 0;
-            this.txtServiceUrl.Text = "net.tcp://appserver:8080/Service";
-            // 
-            // txtSPN
-            // 
-            this.txtSPN.Location = new System.Drawing.Point(13, 40);
-            this.txtSPN.Name = "txtSPN";
-            this.txtSPN.Size = new System.Drawing.Size(259, 20);
-            this.txtSPN.TabIndex = 1;
-            this.txtSPN.Text = "HOST/appserver";
-            // 
-            // btnConnect
-            // 
-            this.btnConnect.Location = new System.Drawing.Point(13, 67);
-            this.btnConnect.Name = "btnConnect";
-            this.btnConnect.Size = new System.Drawing.Size(75, 23);
-            this.btnConnect.TabIndex = 2;
-            this.btnConnect.Text = "Connect";
-            this.btnConnect.UseVisualStyleBackColor = true;
-            this.btnConnect.Click += new System.EventHandler(this.btnConnect_Click);
-            // 
-            // lblResult
-            // 
-            this.lblResult.Location = new System.Drawing.Point(13, 97);
-            this.lblResult.Name = "lblResult";
-            this.lblResult.Size = new System.Drawing.Size(259, 23);
-            this.lblResult.TabIndex = 3;
-            this.lblResult.Text = "Result will appear here";
-            // 
-            // Form1
-            // 
-            this.ClientSize = new System.Drawing.Size(284, 131);
-            this.Controls.Add(this.lblResult);
-            this.Controls.Add(this.btnConnect);
-            this.Controls.Add(this.txtSPN);
-            this.Controls.Add(this.txtServiceUrl);
-            this.Name = "Form1";
-            this.Text = "WCF Client";
-            this.ResumeLayout(false);
-            this.PerformLayout();
-        }
-    }
-}
-
-
-
-
-
 using System;
 using System.ServiceModel;
 using System.Windows.Forms;
+using System.Reflection;
 
 namespace WCFClientAppWinForms
 {
@@ -102,7 +23,7 @@ namespace WCFClientAppWinForms
                 // Create a binding to match the one in app.config
                 var binding = new NetTcpBinding(SecurityMode.Transport)
                 {
-                    Security = 
+                    Security =
                     {
                         Transport = { ClientCredentialType = TcpClientCredentialType.Windows }
                     }
@@ -111,8 +32,8 @@ namespace WCFClientAppWinForms
                 // Set the address of the service
                 var address = new EndpointAddress(serviceUrl);
 
-                // Create a channel factory for the IService contract
-                var channelFactory = new ChannelFactory<IService>(binding, address);
+                // Create a generic channel factory with a placeholder for the service interface
+                var channelFactory = new ChannelFactory<object>(binding, address);
 
                 // Set the credentials to use Windows authentication
                 channelFactory.Credentials.Windows.ClientCredential = System.Net.CredentialCache.DefaultNetworkCredentials;
@@ -121,14 +42,24 @@ namespace WCFClientAppWinForms
                 channelFactory.Endpoint.Address = new EndpointAddress(serviceUrl);
                 channelFactory.Endpoint.Identity = new EndpointIdentity(spn);
 
-                // Create a proxy to the service
-                IService client = channelFactory.CreateChannel();
+                // Create a generic proxy to the service
+                object client = channelFactory.CreateChannel();
 
-                // Call the service method
-                string result = client.GetData(123);
+                // Dynamically invoke the method (assuming the method name is 'GetData' and takes an integer)
+                var methodInfo = client.GetType().GetMethod("GetData");
+                if (methodInfo != null)
+                {
+                    // Invoke 'GetData' with a parameter (e.g., 123)
+                    object[] parameters = new object[] { 123 };
+                    string result = (string)methodInfo.Invoke(client, parameters);
 
-                // Display the result in the label
-                lblResult.Text = "Service Response: " + result;
+                    // Display the result in the label
+                    lblResult.Text = "Service Response: " + result;
+                }
+                else
+                {
+                    lblResult.Text = "Method 'GetData' not found.";
+                }
 
                 // Close the channel
                 ((IClientChannel)client).Close();
@@ -139,17 +70,4 @@ namespace WCFClientAppWinForms
             }
         }
     }
-
-    // Define the contract (same as the WCF service)
-    [ServiceContract]
-    public interface IService
-    {
-        [OperationContract]
-        string GetData(int value);
-    }
 }
-
-
-dotnet add package System.ServiceModel.Duplex --version 4.9.0
-dotnet add package System.ServiceModel.Http --version 4.9.0
-dotnet add package System.ServiceModel.NetTcp --version 4.9.0
