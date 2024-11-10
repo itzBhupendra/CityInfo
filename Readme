@@ -1,7 +1,6 @@
 using System;
 using System.ServiceModel;
 using System.Windows.Forms;
-using System.Reflection;
 
 namespace WCFClientAppWinForms
 {
@@ -38,9 +37,8 @@ namespace WCFClientAppWinForms
                 // Set the credentials to use Windows authentication
                 channelFactory.Credentials.Windows.ClientCredential = System.Net.CredentialCache.DefaultNetworkCredentials;
 
-                // Set the identity to use the specified SPN
-                channelFactory.Endpoint.Address = new EndpointAddress(serviceUrl);
-                channelFactory.Endpoint.Identity = new EndpointIdentity(spn);
+                // Set the service principal name (SPN) as the service's identity
+                channelFactory.Credentials.Windows.AllowedImpersonationLevel = System.Security.Principal.TokenImpersonationLevel.Impersonation;
 
                 // Create a generic proxy to the service
                 object client = channelFactory.CreateChannel();
