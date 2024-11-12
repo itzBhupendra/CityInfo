@@ -1,71 +1,57 @@
-using System;
-using System.ServiceModel;
-using System.Windows.Forms;
-
-namespace WCFClientAppWinForms
+[Route("api/health")]
+[ApiController]
+public class HealthController : ControllerBase
 {
-    public partial class Form1 : Form
+    [HttpGet("metrics")]
+    public IActionResult GetMetrics()
     {
-        public Form1()
+        var metrics = new
         {
-            InitializeComponent();
+            RequestsPerMinute = RequestMonitoringMiddleware.GetRequestsPerMinute(),
+            OpenHandles = Process.GetCurrentProcess().HandleCount,
+            MemoryUsage = GC.GetTotalMemory(false) / (1024 * 1024)  // Memory in MB
+        };
+        return Ok(metrics);
+    }
+}
+
+
+public class MemoryMonitoringMiddleware
+{
+    private static readonly List<long> _memorySnapshots = new List<long>();
+    private readonly RequestDelegate _next;
+
+    public MemoryMonitoringMiddleware(RequestDelegate next)
+    {
+        _next = next;
+    }
+
+    public async Task Invoke(HttpContext context)
+    {
+        // Take a memory snapshot
+        _memorySnapshots.Add(GC.GetTotalMemory(false));
+        
+        // Keep the list manageable by removing oldest entries
+        if (_memorySnapshots.Count > 100) 
+        {
+            _memorySnapshots.RemoveAt(0);
         }
+        
+        await _next(context);
+    }
 
-        private void btnConnect_Click(object sender, EventArgs e)
+    public static bool IsMemoryLeaking()
+    {
+        if (_memorySnapshots.Count < 10) return false;
+        
+        // Analyze trend: e.g., check if last 10 snapshots show increasing usage
+        for (int i = _memorySnapshots.Count - 10; i < _memorySnapshots.Count - 1; i++)
         {
-            try
+            if (_memorySnapshots[i] > _memorySnapshots[i + 1])
             {
-                // Retrieve values from the textboxes
-                string serviceUrl = txtServiceUrl.Text;
-                string spn = txtSPN.Text;
-
-                // Create a binding to match the one in app.config
-                var binding = new NetTcpBinding(SecurityMode.Transport)
-                {
-                    Security =
-                    {
-                        Transport = { ClientCredentialType = TcpClientCredentialType.Windows }
-                    }
-                };
-
-                // Set the address of the service
-                var address = new EndpointAddress(serviceUrl);
-
-                // Create a generic channel factory with a placeholder for the service interface
-                var channelFactory = new ChannelFactory<object>(binding, address);
-
-                // Set the credentials to use Windows authentication
-                channelFactory.Credentials.Windows.ClientCredential = System.Net.CredentialCache.DefaultNetworkCredentials;
-
-                // Set the service principal name (SPN) as the service's identity
-                channelFactory.Credentials.Windows.AllowedImpersonationLevel = System.Security.Principal.TokenImpersonationLevel.Impersonation;
-
-                // Create a generic proxy to the service
-                object client = channelFactory.CreateChannel();
-
-                // Dynamically invoke the method (assuming the method name is 'GetData' and takes an integer)
-                var methodInfo = client.GetType().GetMethod("GetData");
-                if (methodInfo != null)
-                {
-                    // Invoke 'GetData' with a parameter (e.g., 123)
-                    object[] parameters = new object[] { 123 };
-                    string result = (string)methodInfo.Invoke(client, parameters);
-
-                    // Display the result in the label
-                    lblResult.Text = "Service Response: " + result;
-                }
-                else
-                {
-                    lblResult.Text = "Method 'GetData' not found.";
-                }
-
-                // Close the channel
-                ((IClientChannel)client).Close();
-            }
-            catch (Exception ex)
-            {
-                lblResult.Text = "Error: " + ex.Message;
+                return false; // No leak detected in this sequence
             }
         }
+        return true; // Possible leak detected
     }
 }
