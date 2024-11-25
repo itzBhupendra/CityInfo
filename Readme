@@ -1,32 +1,75 @@
-public static class ApiHelper
-{
-    private static readonly HttpClient _client = new();
+<Window x:Class="LogViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:LogViewer.ViewModels"
+        Title="Log Viewer" Height="450" Width="800">
+    <Window.DataContext>
+        <local:MainViewModel />
+    </Window.DataContext>
 
-    public static async Task<List<CorrelationIdItem>> GetCorrelationIdsWithSystemException()
-    {
-        var response = await _client.GetAsync("http://your-api-url/correlation-ids");
-        if (response.IsSuccessStatusCode)
-        {
-            var result = await response.Content.ReadAsAsync<List<string>>();
-            return result.Select(id => new CorrelationIdItem { CorrelationId = id }).ToList();
-        }
-        return new List<CorrelationIdItem>();
-    }
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200" /> <!-- Left panel width -->
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-    public static async Task<List<LogEntry>> GetLogs(string correlationId)
-    {
-        var response = await _client.GetAsync($"http://your-api-url/logs/{correlationId}");
-        if (response.IsSuccessStatusCode)
-        {
-            var apiResponse = await response.Content.ReadAsAsync<ApiResponse<List<LogEntry>>>();
-            return apiResponse.Result;
-        }
-        return new List<LogEntry>();
-    }
-}
+        <!-- Left Panel: Correlation IDs -->
+        <StackPanel Grid.Column="0" Background="LightGray" VerticalAlignment="Stretch">
+            <TextBlock Text="Correlation IDs"
+                       FontSize="18"  <!-- Increased Font Size -->
+                       FontWeight="Bold"
+                       Margin="10" />
+            <ListBox ItemsSource="{Binding CorrelationIds}"
+                     SelectedItem="{Binding SelectedCorrelationId}"
+                     DisplayMemberPath="CorrelationId"
+                     Margin="10,0"
+                     FontSize="14"  <!-- Adjust font size of list items -->
+                     Height="Auto" />
+        </StackPanel>
 
-public class ApiResponse<T>
-{
-    public bool IsSuccess { get; set; }
-    public T Result { get; set; }
-}
+        <!-- Right Panel: Main Content -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Search Section -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBox Width="300"
+                         Margin="0,0,10,0"
+                         PlaceholderText="Enter Correlation ID"
+                         Text="{Binding CorrelationId, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Content="Search"
+                        Width="100"
+                        Command="{Binding FetchLogsCommand}" />
+            </StackPanel>
+
+            <!-- DataGrid Section -->
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{Binding Logs}"
+                      AutoGenerateColumns="False"
+                      CanUserSortColumns="True"
+                      Margin="0,10,0,0"
+                      IsReadOnly="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Date Time"
+                                        Binding="{Binding DateTime}"
+                                        Width="150" />
+                    <DataGridTextColumn Header="Log Level"
+                                        Binding="{Binding LogLevel}"
+                                        Width="100" />
+                    <DataGridTextColumn Header="Correlation ID"
+                                        Binding="{Binding CorrelationId}"
+                                        Width="200" />
+                    <DataGridTextColumn Header="Message"
+                                        Binding="{Binding Message}"
+                                        Width="*" />
+                    <DataGridTextColumn Header="Log Folder Name"
+                                        Binding="{Binding LogFolderName}"
+                                        Width="150" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </Grid>
+</Window>
