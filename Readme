@@ -9,8 +9,9 @@
 
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200" /> <!-- Left panel width -->
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="200" MinWidth="150" /> <!-- Left panel with minimum width -->
+            <ColumnDefinition Width="5" /> <!-- GridSplitter column -->
+            <ColumnDefinition Width="*" /> <!-- Right panel -->
         </Grid.ColumnDefinitions>
 
         <!-- Left Panel: Correlation IDs -->
@@ -27,19 +28,26 @@
                      Height="Auto" />
         </StackPanel>
 
+        <!-- GridSplitter for Resizing -->
+        <GridSplitter Grid.Column="1"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Background="DarkGray"
+                      Width="5" /> <!-- Splitter thickness -->
+
         <!-- Right Panel: Main Content -->
-        <Grid Grid.Column="1">
+        <Grid Grid.Column="2">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- Search Section -->
+            <!-- Filter Section -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                 <TextBox Width="300"
                          Margin="0,0,10,0"
                          PlaceholderText="Enter Correlation ID"
-                         Text="{Binding CorrelationId, UpdateSourceTrigger=PropertyChanged}" />
+                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
                 <Button Content="Search"
                         Width="100"
                         Command="{Binding FetchLogsCommand}" />
@@ -47,7 +55,7 @@
 
             <!-- DataGrid Section -->
             <DataGrid Grid.Row="1"
-                      ItemsSource="{Binding Logs}"
+                      ItemsSource="{Binding FilteredLogs}"
                       AutoGenerateColumns="False"
                       CanUserSortColumns="True"
                       Margin="0,10,0,0"
@@ -73,3 +81,105 @@
         </Grid>
     </Grid>
 </Window>
+
+
+
+
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Windows.Data;
+using System.Windows.Input;
+
+namespace LogViewer.ViewModels
+{
+    public class MainViewModel : INotifyPropertyChanged
+    {
+        private string _filterText;
+        private ObservableCollection<LogEntry> _logs;
+        private ICollectionView _filteredLogs;
+
+        public MainViewModel()
+        {
+            // Sample data
+            Logs = new ObservableCollection<LogEntry>
+            {
+                new LogEntry { DateTime = "2024-06-10T03:56:22.572", LogLevel = "Error", CorrelationId = "ABC123", Message = "SYSTEM_EXCEPTION: Something went wrong", LogFolderName = "API1" },
+                new LogEntry { DateTime = "2024-06-10T04:56:22.572", LogLevel = "Info", CorrelationId = "DEF456", Message = "Operation completed", LogFolderName = "API2" }
+            };
+
+            // Initialize filtered collection
+            FilteredLogs = CollectionViewSource.GetDefaultView(Logs);
+            FilteredLogs.Filter = FilterLogs;
+        }
+
+        public ObservableCollection<LogEntry> Logs
+        {
+            get => _logs;
+            set
+            {
+                _logs = value;
+                OnPropertyChanged(nameof(Logs));
+                FilteredLogs.Refresh();  // Refresh when the original list changes
+            }
+        }
+
+        public ICollectionView FilteredLogs
+        {
+            get => _filteredLogs;
+            set
+            {
+                _filteredLogs = value;
+                OnPropertyChanged(nameof(FilteredLogs));
+            }
+        }
+
+        public string FilterText
+        {
+            get => _filterText;
+            set
+            {
+                if (_filterText != value)
+                {
+                    _filterText = value;
+                    OnPropertyChanged(nameof(FilterText));
+                    FilteredLogs.Refresh();  // Refresh collection when filter changes
+                }
+            }
+        }
+
+        private bool FilterLogs(object obj)
+        {
+            if (obj is LogEntry logEntry)
+            {
+                // Filter based on correlation ID and if message starts with "SYSTEM_EXCEPTION"
+                return string.IsNullOrEmpty(FilterText) || logEntry.CorrelationId.Contains(FilterText) && logEntry.Message.StartsWith("SYSTEM_EXCEPTION");
+            }
+            return false;
+        }
+
+        public ICommand FetchLogsCommand => new RelayCommand(FetchLogs);
+
+        private void FetchLogs()
+        {
+            // Call API to fetch logs here
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    public class LogEntry
+    {
+        public string DateTime { get; set; }
+        public string LogLevel { get; set; }
+        public string CorrelationId { get; set; }
+        public string Message { get; set; }
+        public string LogFolderName { get; set; }
+    }
+}
+
+
