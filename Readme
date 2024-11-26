@@ -1,54 +1,47 @@
-using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 
-namespace LogViewer
+class Program
 {
-    public static class Startup
+    public class Item
     {
-        public static IServiceProvider ConfigureServices()
+        public string Name { get; set; }
+        public string DateTimeString { get; set; }
+    }
+
+    static void Main()
+    {
+        // List of items with DateTime strings including variable milliseconds
+        var items = new List<Item>
         {
-            var serviceCollection = new ServiceCollection();
+            new Item { Name = "Item1", DateTimeString = "2024-11-26T15:23:45.123" },
+            new Item { Name = "Item2", DateTimeString = "2024-11-26T04:54:15.95" }, // 2 digits for milliseconds
+            new Item { Name = "Item3", DateTimeString = "2024-11-25T10:15:30.456" },
+            new Item { Name = "Item4", DateTimeString = "2024-11-26T15:23:44.789" }
+        };
 
-            // Register ViewModels
-            serviceCollection.AddSingleton<MainViewModel>();
-            serviceCollection.AddTransient<LogDetailViewModel>();
+        // Sort items by DateTimeString property including milliseconds
+        var sortedItems = items
+            .OrderBy(item => NormalizeAndParseDateTime(item.DateTimeString))
+            .ToList();
 
-            // Register Services (e.g. LogService)
-            serviceCollection.AddSingleton<ILogService, LogService>();
-
-            // Register other services, e.g., HTTP clients, repositories, etc.
-            serviceCollection.AddHttpClient(); // For HTTP requests, if needed
-            serviceCollection.AddSingleton<ICorrelationIdService, CorrelationIdService>();
-
-            // Build and return the service provider
-            return serviceCollection.BuildServiceProvider();
+        // Print sorted items
+        Console.WriteLine("Sorted Items:");
+        foreach (var item in sortedItems)
+        {
+            Console.WriteLine($"{item.Name} - {item.DateTimeString}");
         }
     }
-}
 
-
-
-
-
-using Microsoft.Extensions.DependencyInjection;
-using System.Windows;
-
-namespace LogViewer
-{
-    public partial class App : Application
+    // Helper method to normalize and parse the DateTime string
+    static DateTime NormalizeAndParseDateTime(string dateTimeString)
     {
-        private IServiceProvider _serviceProvider;
-
-        protected override void OnStartup(StartupEventArgs e)
-        {
-            base.OnStartup(e);
-
-            // Configure services
-            _serviceProvider = Startup.ConfigureServices();
-
-            // Create the main window and set its DataContext (MVVM)
-            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
-            mainWindow.Show();
-        }
+        // Ensure milliseconds are always 3 digits
+        var normalizedString = dateTimeString.Contains('.')
+            ? dateTimeString.Split('.')[0] + "." + dateTimeString.Split('.')[1].PadRight(3, '0')
+            : dateTimeString;
+        return DateTime.ParseExact(normalizedString, "yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
     }
 }
