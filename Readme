@@ -1,6 +1,23 @@
-  <Grid Background="#88000000" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBlock Text="Loading..." FontSize="20" Foreground="White" HorizontalAlignment="Center" Margin="0,10,0,10" />
-            <ProgressBar Width="200" Height="20" IsIndeterminate="True" />
-        </StackPanel>
-    </Grid>
+using System;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Data;
+
+public class BoolToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return (bool)value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return (Visibility)value == Visibility.Visible;
+    }
+}
+
+
+
+<Application.Resources>
+    <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+</Application.Resources>
