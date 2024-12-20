@@ -1,23 +1,143 @@
-using System;
-using System.Globalization;
-using System.Windows;
-using System.Windows.Data;
-
-public class BoolToVisibilityConverter : IValueConverter
+[ApiController]
+[Route("api/[controller]")]
+public class HelpController : ControllerBase
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    public HelpController(IHttpClientFactory httpClientFactory)
     {
-        return (bool)value ? Visibility.Visible : Visibility.Collapsed;
+        _httpClientFactory = httpClientFactory;
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    [HttpGet("{errorCode}")]
+    public async Task<IActionResult> GetHelpContent(string errorCode)
     {
-        return (Visibility)value == Visibility.Visible;
+        var client = _httpClientFactory.CreateClient();
+        var url = $"https://your-confluence-site/rest/api/content?title={errorCode}"; // Update URL to match Confluence API
+        var response = await client.GetAsync(url);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var content = await response.Content.ReadAsStringAsync();
+            return Ok(new { IsSuccess = true, Content = content });
+        }
+
+        return NotFound(new { IsSuccess = false, Message = "Error content not found." });
     }
 }
 
 
 
-<Application.Resources>
-    <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-</Application.Resources>
+<DataGrid AutoGenerateColumns="False" ItemsSource="{Binding LogEntries}">
+    <DataGrid.Columns>
+        <!-- Other Columns -->
+        <DataGridTextColumn Header="Error Code" Binding="{Binding ErrorCode}" />
+        
+        <DataGridTemplateColumn Header="Help">
+            <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                    <Button Content="Help" Command="{Binding DataContext.ShowHelpCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                            CommandParameter="{Binding ErrorCode}" />
+                </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+    </DataGrid.Columns>
+</DataGrid>
+
+public class MainViewModel : ViewModelBase
+{
+    private readonly IApiHelper _apiHelper;
+
+    public MainViewModel(IApiHelper apiHelper)
+    {
+        _apiHelper = apiHelper;
+        ShowHelpCommand = new RelayCommand<string>(OnShowHelp);
+    }
+
+    public ICommand ShowHelpCommand { get; }
+
+    private async void OnShowHelp(string errorCode)
+    {
+        try
+        {
+            var response = await _apiHelper.GetHelpContentAsync(errorCode);
+
+            if (response.IsSuccess)
+            {
+                var helpWindow = new HelpWindow
+                {
+                    DataContext = new HelpViewModel(response.Content)
+                };
+                helpWindow.ShowDialog();
+            }
+            else
+            {
+                MessageBox.Show(response.Message, "Help Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error fetching help content: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+}
+
+
+
+<Window x:Class="YourNamespace.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Help" Height="400" Width="600">
+    <ScrollViewer>
+        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Margin="10" FontSize="14" />
+    </ScrollViewer>
+</Window>
+
+
+
+
+public class HelpViewModel : ViewModelBase
+{
+    public HelpViewModel(string content)
+    {
+        Content = content;
+    }
+
+    public string Content { get; }
+}
+
+
+
+
+public class ApiHelper : IApiHelper
+{
+    private readonly HttpClient _client;
+
+    public ApiHelper(HttpClient client)
+    {
+        _client = client;
+    }
+
+    public async Task<ApiResponse<string>> GetHelpContentAsync(string errorCode)
+    {
+        var response = await _client.GetAsync($"api/help/{errorCode}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var content = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<string>(true, content);
+        }
+
+        return new ApiResponse<string>(false, null, "Error content not found.");
+    }
+}
+
+
+
+public interface IApiHelper
+{
+    Task<ApiResponse<string>> GetHelpContentAsync(string errorCode);
+}
+
+
+
