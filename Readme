@@ -1,143 +1,87 @@
-[ApiController]
-[Route("api/[controller]")]
-public class HelpController : ControllerBase
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+
+class Program
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-
-    public HelpController(IHttpClientFactory httpClientFactory)
+    static void Main()
     {
-        _httpClientFactory = httpClientFactory;
-    }
+        string certificateName = "YourCertificateName"; // Replace with your certificate's name
+        var latestCertificate = GetLatestCertificate(certificateName);
 
-    [HttpGet("{errorCode}")]
-    public async Task<IActionResult> GetHelpContent(string errorCode)
-    {
-        var client = _httpClientFactory.CreateClient();
-        var url = $"https://your-confluence-site/rest/api/content?title={errorCode}"; // Update URL to match Confluence API
-        var response = await client.GetAsync(url);
-
-        if (response.IsSuccessStatusCode)
+        if (latestCertificate != null)
         {
-            var content = await response.Content.ReadAsStringAsync();
-            return Ok(new { IsSuccess = true, Content = content });
+            Console.WriteLine($"Latest Certificate Thumbprint: {latestCertificate.Thumbprint}");
         }
-
-        return NotFound(new { IsSuccess = false, Message = "Error content not found." });
+        else
+        {
+            Console.WriteLine("No certificate found.");
+        }
     }
-}
 
-
-
-<DataGrid AutoGenerateColumns="False" ItemsSource="{Binding LogEntries}">
-    <DataGrid.Columns>
-        <!-- Other Columns -->
-        <DataGridTextColumn Header="Error Code" Binding="{Binding ErrorCode}" />
-        
-        <DataGridTemplateColumn Header="Help">
-            <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate>
-                    <Button Content="Help" Command="{Binding DataContext.ShowHelpCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                            CommandParameter="{Binding ErrorCode}" />
-                </DataTemplate>
-            </DataGridTemplateColumn.CellTemplate>
-        </DataGridTemplateColumn>
-    </DataGrid.Columns>
-</DataGrid>
-
-public class MainViewModel : ViewModelBase
-{
-    private readonly IApiHelper _apiHelper;
-
-    public MainViewModel(IApiHelper apiHelper)
+    static X509Certificate2 GetLatestCertificate(string certificateName)
     {
-        _apiHelper = apiHelper;
-        ShowHelpCommand = new RelayCommand<string>(OnShowHelp);
+        using (X509Store store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
+        {
+            store.Open(OpenFlags.ReadOnly);
+            var certificates = store.Certificates.Cast<X509Certificate2>()
+                .Where(cert => cert.Subject.Contains($"CN={certificateName}", StringComparison.OrdinalIgnoreCase));
+
+            X509Certificate2 latestCert = null;
+            DateTime latestInstallDate = DateTime.MinValue;
+
+            foreach (var cert in certificates)
+            {
+                DateTime installDate = GetCertificateInstallDate(cert.Thumbprint);
+                if (installDate > latestInstallDate)
+                {
+                    latestInstallDate = installDate;
+                    latestCert = cert;
+                }
+            }
+
+            return latestCert;
+        }
     }
 
-    public ICommand ShowHelpCommand { get; }
-
-    private async void OnShowHelp(string errorCode)
+    static DateTime GetCertificateInstallDate(string thumbprint)
     {
         try
         {
-            var response = await _apiHelper.GetHelpContentAsync(errorCode);
-
-            if (response.IsSuccess)
+            // Run certutil command to get installation date
+            var process = new Process
             {
-                var helpWindow = new HelpWindow
+                StartInfo = new ProcessStartInfo
                 {
-                    DataContext = new HelpViewModel(response.Content)
-                };
-                helpWindow.ShowDialog();
-            }
-            else
+                    FileName = "certutil",
+                    Arguments = $"-store My {thumbprint}",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            // Parse the output for installation date
+            string installDateLine = output.Split(Environment.NewLine)
+                .FirstOrDefault(line => line.Contains("NotBefore", StringComparison.OrdinalIgnoreCase));
+
+            if (installDateLine != null)
             {
-                MessageBox.Show(response.Message, "Help Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                string dateStr = installDateLine.Split(new[] { "NotBefore:" }, StringSplitOptions.None)[1].Trim();
+                return DateTime.Parse(dateStr);
             }
         }
-        catch (Exception ex)
+        catch
         {
-            MessageBox.Show($"Error fetching help content: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-}
-
-
-
-<Window x:Class="YourNamespace.HelpWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Help" Height="400" Width="600">
-    <ScrollViewer>
-        <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Margin="10" FontSize="14" />
-    </ScrollViewer>
-</Window>
-
-
-
-
-public class HelpViewModel : ViewModelBase
-{
-    public HelpViewModel(string content)
-    {
-        Content = content;
-    }
-
-    public string Content { get; }
-}
-
-
-
-
-public class ApiHelper : IApiHelper
-{
-    private readonly HttpClient _client;
-
-    public ApiHelper(HttpClient client)
-    {
-        _client = client;
-    }
-
-    public async Task<ApiResponse<string>> GetHelpContentAsync(string errorCode)
-    {
-        var response = await _client.GetAsync($"api/help/{errorCode}");
-
-        if (response.IsSuccessStatusCode)
-        {
-            var content = await response.Content.ReadAsStringAsync();
-            return new ApiResponse<string>(true, content);
+            // Handle exceptions (if any)
         }
 
-        return new ApiResponse<string>(false, null, "Error content not found.");
+        return DateTime.MinValue;
     }
 }
-
-
-
-public interface IApiHelper
-{
-    Task<ApiResponse<string>> GetHelpContentAsync(string errorCode);
-}
-
-
-
