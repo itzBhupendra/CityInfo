@@ -1,87 +1,80 @@
 using System;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-class Program
+public class CertificateService
 {
-    static void Main()
-    {
-        string certificateName = "YourCertificateName"; // Replace with your certificate's name
-        var latestCertificate = GetLatestCertificate(certificateName);
+    private readonly string _certificateName;
 
-        if (latestCertificate != null)
-        {
-            Console.WriteLine($"Latest Certificate Thumbprint: {latestCertificate.Thumbprint}");
-        }
-        else
-        {
-            Console.WriteLine("No certificate found.");
-        }
+    public CertificateService(string certificateName)
+    {
+        _certificateName = certificateName ?? throw new ArgumentNullException(nameof(certificateName));
     }
 
-    static X509Certificate2 GetLatestCertificate(string certificateName)
+    public X509Certificate2 GetLatestCertificate()
     {
-        using (X509Store store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
+        using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
         {
             store.Open(OpenFlags.ReadOnly);
-            var certificates = store.Certificates.Cast<X509Certificate2>()
-                .Where(cert => cert.Subject.Contains($"CN={certificateName}", StringComparison.OrdinalIgnoreCase));
 
-            X509Certificate2 latestCert = null;
-            DateTime latestInstallDate = DateTime.MinValue;
+            var certificate = store.Certificates
+                .Find(X509FindType.FindBySubjectName, _certificateName, validOnly: true)
+                .OfType<X509Certificate2>()
+                .OrderByDescending(cert => cert.NotBefore) // Get the latest by installation date
+                .FirstOrDefault();
 
-            foreach (var cert in certificates)
+            if (certificate == null)
             {
-                DateTime installDate = GetCertificateInstallDate(cert.Thumbprint);
-                if (installDate > latestInstallDate)
-                {
-                    latestInstallDate = installDate;
-                    latestCert = cert;
-                }
+                throw new Exception($"Certificate '{_certificateName}' not found.");
             }
 
-            return latestCert;
+            return certificate;
         }
     }
 
-    static DateTime GetCertificateInstallDate(string thumbprint)
+    public string GetPrivateKeyAsXml()
     {
-        try
+        var certificate = GetLatestCertificate();
+
+        if (!certificate.HasPrivateKey)
         {
-            // Run certutil command to get installation date
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "certutil",
-                    Arguments = $"-store My {thumbprint}",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            // Parse the output for installation date
-            string installDateLine = output.Split(Environment.NewLine)
-                .FirstOrDefault(line => line.Contains("NotBefore", StringComparison.OrdinalIgnoreCase));
-
-            if (installDateLine != null)
-            {
-                string dateStr = installDateLine.Split(new[] { "NotBefore:" }, StringSplitOptions.None)[1].Trim();
-                return DateTime.Parse(dateStr);
-            }
-        }
-        catch
-        {
-            // Handle exceptions (if any)
+            throw new Exception("The certificate does not have a private key.");
         }
 
-        return DateTime.MinValue;
+        // Export the private key as XML
+        var rsa = certificate.GetRSAPrivateKey() as RSACryptoServiceProvider;
+        if (rsa == null)
+        {
+            throw new NotSupportedException("The private key is not exportable as XML. It may use CNG.");
+        }
+
+        return rsa.ToXmlString(includePrivateParameters: true);
     }
 }
+
+
+
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Register the CertificateService
+builder.Services.AddSingleton(sp => new CertificateService("YourCertificateName"));
+
+// Configure HttpClient with the certificate (optional, if using HttpClient)
+builder.Services.AddHttpClient("ClientWithCertificate")
+    .ConfigurePrimaryHttpMessageHandler(sp =>
+    {
+        var certificateService = sp.GetRequiredService<CertificateService>();
+        var handler = new HttpClientHandler();
+
+        // Attach the certificate
+        handler.ClientCertificates.Add(certificateService.GetLatestCertificate());
+
+        return handler;
+    });
+
+var app = builder.Build();
+app.MapGet("/", () => "Hello World!");
+app.Run();
