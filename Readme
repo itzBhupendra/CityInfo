@@ -1,15 +1,10 @@
-app.Use(async (context, next) =>
+builder.Services.AddCors(options =>
 {
-    var userAgent = context.Request.Headers["User-Agent"].ToString();
-    var referer = context.Request.Headers["Referer"].ToString();
-
-    // Check if User-Agent or Referer is missing or doesn't indicate a browser
-    if (string.IsNullOrEmpty(userAgent) || !userAgent.Contains("Mozilla") || string.IsNullOrEmpty(referer))
+    options.AddPolicy("AllowSpecificWebApp", policy =>
     {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsync("Forbidden: API calls are only allowed from web browsers.");
-        return;
-    }
-
-    await next();
+        policy.WithOrigins("https://your-frontend-domain.com") // Replace with your frontend's URL
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // Enable cookies or credentials if needed
+    });
 });
