@@ -1,10 +1,4 @@
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowSpecificWebApp", policy =>
-    {
-        policy.WithOrigins("https://your-frontend-domain.com") // Replace with your frontend's URL
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Enable cookies or credentials if needed
-    });
-});
+var headers = Request.Headers;
+        var headerList = headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}");
+
+        var headersAsString = string.Join("\n", headerList);
